@@ -124,14 +124,13 @@ struct TubesMap
 //	Sub Functions
 //
 void initOutput(HistoOutput&, ServiceVariables&, string);
-vector<string>& readFiles(string, int verbosity=0);
+vector<string>& readFiles(string, ServiceVariables&);
 void branch(RawInput&);
 void analyze(int&, RawInput&, HistoOutput&, TubesMap&, ServiceVariables&);
-int readTubesMap(string fileNameMap, TubesMap&, 
-		int verbosity=0);
-double addHisto(int, RawInput& raw, TH1D*, ServiceVariables&, int v=0);
+int readTubesMap(string fileNameMap, TubesMap&, ServiceVariables&);
+double addHisto(int, RawInput& raw, TH1D*, ServiceVariables&);
 void sigHandler(int);
-double computeSPESignal(int, RawInput&, ServiceVariables&, int v=0);
+double computeSPESignal(int, RawInput&, ServiceVariables&);
 
 
 //
@@ -165,9 +164,9 @@ int main(int argc, char** argv)
 		service.qBins_toUse = qBins_1TS;
 	else if (iTS==2)
 		service.qBins_toUse = qBins_2TS;
-	readTubesMap(fileNameMap, tubesMap, verbosity);
+	readTubesMap(fileNameMap, tubesMap, service);
 	initOutput(out, service, rootOutFileName);
-	vector<string> &vInputFiles = readFiles(listOfFiles, verbosity);
+	vector<string> &vInputFiles = readFiles(listOfFiles, service);
 
 	for (vector<string>::iterator it=vInputFiles.begin(); 
 			(it!=vInputFiles.end()) && runAll==true; ++it)
@@ -184,40 +183,53 @@ int main(int argc, char** argv)
 	//
 	//	Weigh 1D histos and Create 2D Noise Maps
 	//
-	for (int iphi=0; iphi<NUMPHIS; iphi++)
-		for (int ieta=0; ieta<NUMETAS; ieta++)
+	for (int iiphi=0; iiphi<NUMPHIS; iiphi++)
+		for (int iieta=0; iieta<NUMETAS; iieta++)
 			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
 			{
 				//
 				//	Noise
 				//
 				double rmsOfrms, meanOfrms, rmsOfMean, meanOfMean;
-				rmsOfrms = out.hRMSsOfPED[iphi][ieta][idepth]->GetRMS();
-				meanOfrms = out.hRMSsOfPED[iphi][ieta][idepth]->GetMean();
-				rmsOfMean = out.hMeansOfPED[iphi][ieta][idepth]->GetRMS();
-				meanOfMean = out.hMeansOfPED[iphi][ieta][idepth]->GetMean();
-				out.hRMSofRMS->Fill(2*iphi+1, ieta+29, rmsOfrms);
-				out.hMeansOfRMS->Fill(2*iphi+1, ieta+29, meanOfrms);
-				out.hRMSofMeans->Fill(2*iphi+1, ieta+29, rmsOfMean);
-				out.hMeansOfMeans->Fill(2*iphi+1, ieta+29, meanOfMean);
+				rmsOfrms = out.hRMSsOfPED[iiphi][iieta][idepth]->GetRMS();
+				meanOfrms = out.hRMSsOfPED[iiphi][iieta][idepth]->GetMean();
+				rmsOfMean = out.hMeansOfPED[iiphi][iieta][idepth]->GetRMS();
+				meanOfMean = out.hMeansOfPED[iiphi][iieta][idepth]->GetMean();
+				out.hRMSofRMS->Fill(2*iiphi+1, iieta+29, rmsOfrms);
+				out.hMeansOfRMS->Fill(2*iiphi+1, iieta+29, meanOfrms);
+				out.hRMSofMeans->Fill(2*iiphi+1, iieta+29, rmsOfMean);
+				out.hMeansOfMeans->Fill(2*iiphi+1, iieta+29, meanOfMean);
 
 				//
 				//	Weighing
 				//
 				for (int iTubeType=0; iTubeType<NUMTUBETYPES; iTubeType++)
 				{
+					if (service.verbosity>2)
+						cout << "### NumEntries: " <<
+							out.hRAW1D_wSrc[iiphi][iieta][idepth][iTubeType]->GetEntries() 
+							<< "  " << 2*iiphi+1 << "  " << iieta+29 
+							<< "  " << idepth+1 << endl;
 					for (int iBin=0; iBin<NUMBINS; iBin++)
 					{
 						double newContent = 
-						out.hRAW1D_wSrc[iphi][ieta][idepth][iTubeType]->GetBinContent(iBin+1)/out.hRAW1D_wSrc[iphi][ieta][idepth][iTubeType]->GetBinWidth(iBin+1);
-						out.hRAW1D_wSrc[iphi][ieta][idepth][iTubeType]->SetBinContent(iBin+1, newContent);
+						out.hRAW1D_wSrc[iiphi][iieta][idepth][iTubeType]
+						->GetBinContent(iBin+1)/
+						out.hRAW1D_wSrc[iiphi][iieta][idepth][iTubeType]
+						->GetBinWidth(iBin+1);
+						out.hRAW1D_wSrc[iiphi][iieta][idepth][iTubeType]
+							->SetBinContent(iBin+1, newContent);
 
 						if (iTubeType==0)
 						{
 							newContent = 
-							out.hRAW1D_NoSrc[iphi][ieta][idepth]->GetBinContent(
-									iBin+1)/out.hRAW1D_NoSrc[iphi][ieta][idepth]->GetBinWidth(iBin+1);
-							out.hRAW1D_NoSrc[iphi][ieta][idepth]->SetBinContent(
+							out.hRAW1D_NoSrc[iiphi][iieta][idepth]
+							->GetBinContent(
+									iBin+1)/
+							out.hRAW1D_NoSrc[iiphi][iieta][idepth]
+							->GetBinWidth(iBin+1);
+							out.hRAW1D_NoSrc[iiphi][iieta][idepth]
+								->SetBinContent(
 									iBin+1, newContent);
 						}
 					}
@@ -226,14 +238,15 @@ int main(int argc, char** argv)
 					//	Save Graphs
 					//
 					out.rootFile->cd("SRC/SPESignals/VsOrbit");
-					out.gSPESigVsOrbit[iphi][ieta][idepth][iTubeType]->Write();
+					out.gSPESigVsOrbit[iiphi][iieta][idepth][iTubeType]->Write();
 
 					out.rootFile->cd("SRC/SPESignals/VsReelPos");
-					out.gSPESigVsReel[iphi][ieta][idepth][iTubeType]->Write();
+					out.gSPESigVsReel[iiphi][iieta][idepth][iTubeType]->Write();
 				}
 			}
 
 
+	out.rootFile->cd();
 	out.rootFile->Write();
 	out.rootFile->Close();
 	return 0;
@@ -303,10 +316,10 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			cout << "### Current Source Tube: " << someName << endl;
 		}
 
-		int srcEta, srcPhi, srciTubeType, srcWedge, srcTubeNumber;
+		int srciEta, srciPhi, srciTubeType, srcWedge, srcTubeNumber;
 		char srcTubeType;
 		sscanf(sourceTubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
-				&srcWedge, &srcEta, &srcPhi, &srcTubeNumber,
+				&srcWedge, &srciEta, &srciPhi, &srcTubeNumber,
 				&srcTubeType);
 		if (srcTubeType=='A' || srcTubeType=='_')
 			srciTubeType = 0;
@@ -314,17 +327,17 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			srciTubeType = 1;
 		else 
 			cout << "### ERROR: Wrong Tube Type!" << endl;
-		int srciEta = abs(srcEta) - 29;
-		int srciPhi = (srcPhi-1)/2;
+		int srciiEta = abs(srciEta)-29;
+		int srciiPhi = (srciPhi-1)/2;
 
 		//
 		//	Check the reel position validity
 		//
-		if (service.verbosity>2)
+		if (service.verbosity>1)
 			cout << "### ReelPos=" << raw.reelPos << "  start="
-				<< map.tubes[srciPhi][srciEta][srciTubeType].tubeStart
+				<< map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart
 				<< "  end="
-				<< map.tubes[srciPhi][srciEta][srciTubeType].tubeEnd
+				<< map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd
 				<< endl;
 		
 
@@ -337,45 +350,79 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			int ieta = raw.eta[iCh]; int iieta=abs(ieta)-29;
 			int depth = raw.depth[iCh]; int idepth=depth-1;
 
-			if (service.verbosity>0)
-				cout << "### phi=" << iphi << "  eta=" << ieta << "  depth="
-					<< depth << endl;
-
 			//
 			//	If this is a channel with Source
 			//
-			if (srciEta==iieta && srciPhi==iiphi)
+			if (srciEta==ieta && srciPhi==iphi)
 			{
-				double speSignal = computeSPESignal(iCh, raw, service, 
-						service.verbosity);
+				if (service.verbosity>1)
+					cout << "### iphi=" << iphi << "  ieta=" << ieta << "  depth="
+						<< depth << endl;
+				double speSignal = computeSPESignal(iCh, raw, service);
+
+				//
+				//	Try to track signal at the Back of the Source Tube
+				//
+				if ((map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart+100) <
+						raw.reelPos && 
+						(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart +
+						 400)>raw.reelPos)
+					addHisto(iCh, raw, 
+							out.hRAW1D_B_wSrc[iiphi][iieta][idepth][srciTubeType],
+							service);
+
 				if (depth==1)
 				{
-					if (map.tubes[srciPhi][srciEta][srciTubeType].tubeStart <= 
+					
+					if (map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart <= 
 							raw.reelPos && 
-							map.tubes[srciPhi][srciEta][srciTubeType].tubeEnd >= 
+							map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd >=
 							raw.reelPos)
 						addHisto(iCh, raw, 
-							out.hRAW1D_wSrc[iphi][ieta][idepth][srciTubeType],
-							service, service.verbosity);
-					out.gSPESigVsOrbit[iphi][ieta][idepth][srciTubeType]
+							out.hRAW1D_wSrc[iiphi][iieta][idepth][srciTubeType],
+							service);
+
+					//
+					//	Track the Signal at the Front
+					//	NOTE: Depends on the Depth
+					//
+					if ((map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd-400)
+							< raw.reelPos &&
+							(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd 
+							 - 100) > raw.reelPos)
+						addHisto(iCh, raw,
+								out.hRAW1D_F_wSrc[iiphi][iieta][idepth][srciTubeType], service);
+
+					out.gSPESigVsOrbit[iiphi][iieta][idepth][srciTubeType]
 						->SetPoint(pointD1, raw.orbitNum, speSignal);
-					out.gSPESigVsReel[iphi][ieta][idepth][srciTubeType]->SetPoint(
-						pointD1, raw.orbitNum, speSignal);
+					out.gSPESigVsReel[iiphi][iieta][idepth][srciTubeType]
+						->SetPoint(	pointD1, raw.reelPos, speSignal);
 					pointD1++;
 				}
 				else
 				{
-					if ((map.tubes[iphi][ieta][srciTubeType].tubeEnd -
+					if ((map.tubes[iiphi][iieta][srciTubeType].tubeEnd -
 								300)>=raw.reelPos &&
-							map.tubes[iphi][ieta][srciTubeType].tubeStart <= 
+							map.tubes[iiphi][iieta][srciTubeType].tubeStart <= 
 							raw.reelPos)
+						addHisto(
+							iCh, raw,
+							out.hRAW1D_wSrc[iiphi][iieta][idepth][srciTubeType],
+							service);
+					//
+					//	Track the Signal at the Front
+					//
+					if ((map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd-700)
+							< raw.reelPos &&
+							(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd 
+							 - 400) > raw.reelPos)
 						addHisto(iCh, raw,
-								out.hRAW1D_wSrc[iphi][ieta][idepth][srciTubeType],
-								service, service.verbosity);
-					out.gSPESigVsOrbit[iphi][ieta][idepth][srciTubeType]
+								out.hRAW1D_F_wSrc[iiphi][iieta][idepth][srciTubeType], service);
+
+					out.gSPESigVsOrbit[iiphi][iieta][idepth][srciTubeType]
 						->SetPoint(pointD2, raw.orbitNum, speSignal);
-					out.gSPESigVsReel[iphi][ieta][idepth][srciTubeType]->SetPoint(
-						pointD2, raw.orbitNum, speSignal);
+					out.gSPESigVsReel[iiphi][iieta][idepth][srciTubeType]
+						->SetPoint(pointD2, raw.reelPos, speSignal);
 					pointD2++;
 				}
 
@@ -386,31 +433,28 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 				//	This is a channel without a source,
 				//	apply geometric isolation and fill the NoSrc Histo
 				//
-				if ((srciPhi==1 && abs(srciPhi-iphi)<5) || (srciPhi==71 && 
-							abs(srciPhi - iphi)<5))
+				if (!(srciPhi==iphi && srciTubeType==0 && ((srciEta==29 && ieta>=34 && ieta<=39) 
+							|| (srciEta==39 && ieta>=29 && ieta<34))))
 					continue;
-/*				if (abs(srciEta - ieta)>5 && abs(srciPhi - iphi)>5)
-				{
-					addHisto(iCh, raw, 
-							out.hRAW1D_NoSrc[iphi][ieta][idepth], service, 0);
 
-					//	
-					//	To produce 2D maps of RMSs/Means Event by Event
-					//
-					TH1D *h = new TH1D("h1", "h1", 32, service.qBins_toUse);
-					for (int iBin=0; iBin<NUMBINS; iBin++)
-					{
-						int allCapsSum = raw.rawC0[iCh][iBin] + 
-							raw.rawC1[iCh][iBin] + 
-							raw.rawC2[iCh][iBin] + raw.rawC3[iCh][iBin];
-						h->Fill(service.qBins_toUse[iBin], allCapsSum);
-					}
-					h->GetXaxis()->SetRange(0, 15);
-					out.hMeansOfPED[iphi][ieta][idepth]->Fill(h->GetMean());
-					out.hRMSsOfPED[iphi][ieta][idepth]->Fill(h->GetRMS());
-					delete h;
+				addHisto(iCh, raw, 
+					out.hRAW1D_NoSrc[iiphi][iieta][idepth], service);
+
+				//	
+				//	To produce 2D maps of RMSs/Means Event by Event
+				//
+				TH1D *h = new TH1D("h1", "h1", 32, service.qBins_toUse);
+				for (int iBin=0; iBin<NUMBINS; iBin++)
+				{
+					int allCapsSum = raw.rawC0[iCh][iBin] + 
+						raw.rawC1[iCh][iBin] + 
+						raw.rawC2[iCh][iBin] + raw.rawC3[iCh][iBin];
+					h->Fill(service.qBins_toUse[iBin], allCapsSum);
 				}
-				*/
+				h->GetXaxis()->SetRange(0, 15);
+				out.hMeansOfPED[iiphi][iieta][idepth]->Fill(h->GetMean());
+				out.hRMSsOfPED[iiphi][iieta][idepth]->Fill(h->GetRMS());
+				delete h;
 			}
 		}
 
@@ -421,7 +465,7 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 //
 //	Compute SPE signal
 //
-double computeSPESignal(int iCh, RawInput& raw, ServiceVariables& service, int v)
+double computeSPESignal(int iCh, RawInput& raw, ServiceVariables& service)
 {
 	double totSum = 0;
 	double speSum = 0;
@@ -452,33 +496,24 @@ void sigHandler(int sig)
 //	Add RAW histo to a Total Histogram
 //	Returns SPE Signal
 //
-double addHisto(int iCh, RawInput& raw, TH1D *hTotal, ServiceVariables &service, 
-		int v)
+double addHisto(int iCh, RawInput& raw, TH1D *hTotal, ServiceVariables &service)
 {
-	if (v>0)
+	if (service.verbosity>1)
 		cout << "### Adding Histos..." << endl;
 
 	double totSum = 0;
-	double speSum = 0;
 	for (int iBin=0; iBin<NUMBINS; iBin++)
 	{
 		int allCapsSum = raw.rawC0[iCh][iBin] + raw.rawC1[iCh][iBin] + 
 			raw.rawC2[iCh][iBin] + raw.rawC3[iCh][iBin];
 		totSum += allCapsSum;
-		if (hTotal->GetBinCenter(iBin+1)>=service.cutToUse)
-		{
-			double charge = hTotal->GetBinCenter(iBin+1);
-			speSum += allCapsSum*charge;
-		}
-
-		if (v>1)
+		if (service.verbosity>4)
 			cout << "### AllCapsSum=" << allCapsSum << endl;
 
 		hTotal->Fill(service.qBins_toUse[iBin], allCapsSum);
 	}
 
-
-	return speSum/totSum;
+	return totSum;
 }
 
 //
@@ -523,67 +558,67 @@ void initOutput(HistoOutput &out, ServiceVariables &service,
 	gDirectory->mkdir("PEDRMSS");
 //	gDirectory->mkdir()
 
-	for (int iphi=0; iphi<NUMPHIS; iphi++)
-		for (int ieta=0; ieta<NUMETAS; ieta++)
+	for (int iiphi=0; iiphi<NUMPHIS; iiphi++)
+		for (int iieta=0; iieta<NUMETAS; iieta++)
 			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
 				for (int iTubeType=0; iTubeType<NUMTUBETYPES; 
 						iTubeType++)
 				{
 					out.rootFile->cd("SRC/1D");
 					sprintf(histName, "1D_wSrc_%d_PHI%d_ETA%d_D%d",
-							iTubeType, 2*iphi+1, ieta+29, idepth+1);
-					out.hRAW1D_wSrc[iphi][ieta][idepth][iTubeType] = new 
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.hRAW1D_wSrc[iiphi][iieta][idepth][iTubeType] = new 
 						TH1D(histName, histName, 32, service.qBins_toUse);
 
 					out.rootFile->cd("SRC/1D_F");
 					sprintf(histName, "1D_F_wSrc_%d_PHI%d_ETA%d_D%d",
-							iTubeType, 2*iphi+1, ieta+29, idepth+1);
-					out.hRAW1D_F_wSrc[iphi][ieta][idepth][iTubeType] = new 
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.hRAW1D_F_wSrc[iiphi][iieta][idepth][iTubeType] = new 
 						TH1D(histName, histName, 32, service.qBins_toUse);
 
 					out.rootFile->cd("SRC/1D_B");
 					sprintf(histName, "1D_B_wSrc_%d_PHI%d_ETA%d_D%d",
-							iTubeType, 2*iphi+1, ieta+29, idepth+1);
-					out.hRAW1D_B_wSrc[iphi][ieta][idepth][iTubeType] = new 
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.hRAW1D_B_wSrc[iiphi][iieta][idepth][iTubeType] = new 
 						TH1D(histName, histName, 32, service.qBins_toUse);
 
 					out.rootFile->cd("SRC/SPESignals/VsOrbit");
 					sprintf(histName, "SPEsigVsOrbit_%d_PHI%d_ETA%d_D%d",
-							iTubeType, 2*iphi+1, ieta+29, idepth+1);
-					out.gSPESigVsOrbit[iphi][ieta][idepth][iTubeType] = new 
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.gSPESigVsOrbit[iiphi][iieta][idepth][iTubeType] = new 
 						TGraph();
-					out.gSPESigVsOrbit[iphi][ieta][idepth][iTubeType]->SetName(
+					out.gSPESigVsOrbit[iiphi][iieta][idepth][iTubeType]->SetName(
 							histName);
 
 					out.rootFile->cd("SRC/SPESignals/VsReelPos");
 					sprintf(histName, "SPEsigVsReelPos_%d_PHI%d_ETA%d_D%d",
-							iTubeType, 2*iphi+1, ieta+29, idepth+1);
-					out.gSPESigVsReel[iphi][ieta][idepth][iTubeType] = new 
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.gSPESigVsReel[iiphi][iieta][idepth][iTubeType] = new 
 						TGraph();
-					out.gSPESigVsReel[iphi][ieta][idepth][iTubeType]->SetName(
+					out.gSPESigVsReel[iiphi][iieta][idepth][iTubeType]->SetName(
 							histName);
 				}
 
-	for (int iphi=0; iphi<NUMPHIS; iphi++)
-		for (int ieta=0; ieta<NUMETAS; ieta++)
+	for (int iiphi=0; iiphi<NUMPHIS; iiphi++)
+		for (int iieta=0; iieta<NUMETAS; iieta++)
 			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
 			{
 				out.rootFile->cd("NOSRC/1D");
 				sprintf(histName, "1D_NoSrc_PHI%d_ETA%d_D%d",
-						2*iphi+1, ieta+29, idepth+1);
-				out.hRAW1D_NoSrc[iphi][ieta][idepth] = new 
+						2*iiphi+1, iieta+29, idepth+1);
+				out.hRAW1D_NoSrc[iiphi][iieta][idepth] = new 
 					TH1D(histName, histName, 32, service.qBins_toUse);
 
 				out.rootFile->cd("NOSRC/PEDMEANS");
 				sprintf(histName, "PEDMeans_PHI%d_ETA%d_D%d",
-						2*iphi+1, ieta+29, idepth+1);
-				out.hMeansOfPED[iphi][ieta][idepth] = new TH1D(histName, 
+						2*iiphi+1, iieta+29, idepth+1);
+				out.hMeansOfPED[iiphi][iieta][idepth] = new TH1D(histName, 
 						histName, 1000, 0, 20);
 
 				out.rootFile->cd("NOSRC/PEDRMSS");
 				sprintf(histName, "PEDRMSs_PHI%d_ETA%d_D%d",
-						2*iphi+1, ieta+29, idepth+1);
-				out.hRMSsOfPED[iphi][ieta][idepth] = new TH1D(histName,
+						2*iiphi+1, iieta+29, idepth+1);
+				out.hRMSsOfPED[iiphi][iieta][idepth] = new TH1D(histName,
 						histName, 1000, 0, 5);
 			}
 
@@ -593,7 +628,7 @@ void initOutput(HistoOutput &out, ServiceVariables &service,
 //
 //
 //
-vector<string>& readFiles(string listFiles, int v)
+vector<string>& readFiles(string listFiles, ServiceVariables &service)
 {
 	vector<string> *vFileNames = new vector<string>;
 	ifstream in(listFiles.c_str());
@@ -608,8 +643,7 @@ vector<string>& readFiles(string listFiles, int v)
 //
 //	Read in Goemetry Coefficients and Tubes Map
 //
-int readTubesMap(string fileNameMap, TubesMap &map,
-		int verbosity)
+int readTubesMap(string fileNameMap, TubesMap &map, ServiceVariables &service)
 {
 	cout << "### Reading in Tubes Map..." << endl;
 
@@ -651,7 +685,7 @@ int readTubesMap(string fileNameMap, TubesMap &map,
 		map.tubes[iiphi][iieta][iTubeType].tubeName = tubeName;
 		map.tubes[iiphi][iieta][iTubeType].groove = groove;
 
-		if (verbosity > 0)
+		if (service.verbosity > 0)
 			cout << tubeName << "  " << ieta << "  " << iphi << "  "
 				<< tubeStart << "  " << tubeEnd << "  " << groove << endl;
 
