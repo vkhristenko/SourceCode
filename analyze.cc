@@ -433,7 +433,7 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 				//	This is a channel without a source,
 				//	apply geometric isolation and fill the NoSrc Histo
 				//
-				if (!(srciPhi==iphi && srciTubeType==0 && ((srciEta==29 && ieta>=34 && ieta<=39) 
+				if (!(srciPhi==iphi && srciTubeType==0 && ((srciEta==29 && ieta>=34 && ieta<=41) 
 							|| (srciEta==39 && ieta>=29 && ieta<34))))
 					continue;
 

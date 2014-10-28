@@ -8,7 +8,14 @@
 #define NUMBINS 32
 #define PEDCUT_1TS 10
 #define PEDCUT_2TS 18
-#define NUMSWAPS 32
+
+//
+//	Adapt this for either HFP or HFM
+//	#swaps in HFP is 34
+//	#swaps in HFM is 32
+//
+//#define NUMSWAPS 32
+#define NUMSWAPS 34
 
 #include "map.cc"
 
@@ -59,6 +66,8 @@ void analyze_AvgQ(string inFileName, string outFileName, string outTxtFileName,
 			mapFileName, gcfFile, eMapFileName, gainMapFileName, numTS);
 }
 
+double getSwapRatio(TH1D *h, int iTS);
+
 void analyze(string inFileName, string outFileName, string outTxtFileName, 
 		string mapFileName, string gcfFile, 
 		string eMapFileName, string gainMapFileName, int numTS)
@@ -83,7 +92,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					<< "  " << gainMap[iphi][ieta][idepth].gain_OV1
 					<< "  " << gainMap[iphi][ieta][idepth].gain_OV2 << endl;
 			}
-			*/
+*/			
 
 	//
 	//	Create the Output File, initialzie whatever
@@ -162,6 +171,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	TH2D *hPedMean_B[NUMDEPTHS];
 	TH2D *hPedSigma_S[NUMDEPTHS];
 	TH2D *hPedSigma_B[NUMDEPTHS];
+	TH2D *hSwapRatio[NUMDEPTHS];
 	char someName[200];
 	for (int i=0; i<2; i++)
 	{
@@ -176,6 +186,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 
 		sprintf(someName, "PedSigma_B_D%d", i+1);
 		hPedSigma_B[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
+
+		sprintf(someName, "SwapRatio_D%d", i+1);
+		hSwapRatio[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
 	}
 	out->cd("Histos");
 	TH1D *hSPE_UNCORR;
@@ -237,8 +250,8 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				//	Check if this channel is among swaps...
 				//
 				for (int iswap=0; iswap<NUMSWAPS; iswap++)
-					if (swappedChs[iswap].iphi==iphi && 
-							swappedChs[iswap].ieta==ieta &&
+					if (swappedChs[iswap].iphi==(2*iphi+1) && 
+							swappedChs[iswap].ieta==(ieta+29) &&
 							swappedChs[iswap].idepth==idepth)
 						checkSwap = true;
 				if (checkSwap)
@@ -247,9 +260,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					continue;
 				}
 
-				if (numTS==2)
-					if ((2*iphi+1)==51 && (ieta+29)==31)
-						continue;
+//				if (numTS==2)
+//					if ((2*iphi+1)==51 && (ieta+29)==31)
+//						continue;
 
 				//
 				//	Get a Sig histo
@@ -340,6 +353,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				hPedSigma_S[idepth]->Fill(2*iphi+1, ieta+29, qie_sigma_S);
 				hPedSigma_B[idepth]->Fill(2*iphi+1, ieta+29, qie_sigma_B);
 
+				double ratio = getSwapRatio(hRAW_S, numTS);
+				hSwapRatio[idepth]->Fill(2*iphi+1, ieta+29, ratio);
+
 				Double_t qie_mean_S_F = fit_S_F->GetParameter(1);
 				Double_t qie_mean_S_B = fit_S_B->GetParameter(1);
 				Double_t totQSum_S = 0;
@@ -415,13 +431,15 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 						<< "  " << speQ_CORR << "  " 
 						<< gainMap[iphi][ieta][idepth].gain_OV1 << "  "
 						<< qie_mean_S << "  " 
-						<< gainMap[iphi][ieta][idepth].gain_OV2 << endl;
+						<< gainMap[iphi][ieta][idepth].gain_OV2
+						<< endl;
 				else if (numTS==2)
 					outTxt << 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
 						<< "  " << speQ_CORR << "  " 
 						<< gainMap[iphi][ieta][idepth].gain_OV1P100 << "  "
 						<< qie_mean_S << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV2 << endl;
+						<< gainMap[iphi][ieta][idepth].gain_OV2
+						<< endl;
 
 				//
 				//	Plot SPE vs Gain
@@ -517,6 +535,151 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 int initSwaps()
 {
 	Coordinates coord;
+
+	coord.iphi = 57;
+	coord.ieta = 29;
+	coord.idepth=0;
+	swappedChs[0] = coord;
+	coord.iphi = 57;
+	coord.ieta = 30;
+	coord.idepth=0;
+	swappedChs[1] = coord;
+	coord.iphi = 57;
+	coord.ieta = 31;
+	coord.idepth=0;
+	swappedChs[2] = coord;
+	coord.iphi = 57;
+	coord.ieta = 32;
+	coord.idepth=0;
+	swappedChs[3] = coord;
+	coord.iphi = 57;
+	coord.ieta = 33;
+	coord.idepth=0;
+	swappedChs[4] = coord;
+	coord.iphi = 57;
+	coord.ieta = 34;
+	coord.idepth=0;
+	swappedChs[5] = coord;
+
+
+	coord.iphi = 61;
+	coord.ieta = 35;
+	coord.idepth=0;
+	swappedChs[6] = coord;
+	coord.iphi = 61;
+	coord.ieta = 36;
+	coord.idepth=0;
+	swappedChs[7] = coord;
+	coord.iphi = 61;
+	coord.ieta = 37;
+	coord.idepth=0;
+	swappedChs[8] = coord;
+	coord.iphi = 61;
+	coord.ieta = 38;
+	coord.idepth=0;
+	swappedChs[9] = coord;
+	coord.iphi = 61;
+	coord.ieta = 39;
+	coord.idepth=0;
+	swappedChs[10] = coord;
+	coord.iphi = 59;
+	coord.ieta = 40;
+	coord.idepth=0;
+	swappedChs[11] = coord;
+
+	coord.iphi = 53;
+	coord.ieta = 29;
+	coord.idepth=1;
+	swappedChs[12] = coord;
+	coord.iphi = 53;
+	coord.ieta = 30;
+	coord.idepth=1;
+	swappedChs[13] = coord;
+	coord.iphi = 53;
+	coord.ieta = 31;
+	coord.idepth=1;
+	swappedChs[14] = coord;
+	coord.iphi = 53;
+	coord.ieta = 32;
+	coord.idepth=1;
+	swappedChs[15] = coord;
+	coord.iphi = 53;
+	coord.ieta = 33;
+	coord.idepth=1;
+	swappedChs[16] = coord;
+	coord.iphi = 53;
+	coord.ieta = 34;
+	coord.idepth=1;
+	swappedChs[17] = coord;
+
+	coord.iphi = 57;
+	coord.ieta = 35;
+	coord.idepth=1;
+	swappedChs[18] = coord;
+	coord.iphi = 57;
+	coord.ieta = 36;
+	coord.idepth=1;
+	swappedChs[19] = coord;
+	coord.iphi = 57;
+	coord.ieta = 37;
+	coord.idepth=1;
+	swappedChs[20] = coord;
+	coord.iphi = 57;
+	coord.ieta = 38;
+	coord.idepth=1;
+	swappedChs[21] = coord;
+	coord.iphi = 57;
+	coord.ieta = 39;
+	coord.idepth=1;
+	swappedChs[22] = coord;
+	coord.iphi = 55;
+	coord.ieta = 40;
+	coord.idepth=1;
+	swappedChs[23] = coord;
+
+	coord.iphi = 25;
+	coord.ieta = 35;
+	coord.idepth=1;
+	swappedChs[24] = coord;
+	coord.iphi = 25;
+	coord.ieta = 36;
+	coord.idepth=1;
+	swappedChs[25] = coord;
+	coord.iphi = 25;
+	coord.ieta = 37;
+	coord.idepth=1;
+	swappedChs[26] = coord;
+	coord.iphi = 25;
+	coord.ieta = 38;
+	coord.idepth=1;
+	swappedChs[27] = coord;
+	coord.iphi = 25;
+	coord.ieta = 39;
+	coord.idepth=1;
+	swappedChs[28] = coord;
+	coord.iphi = 23;
+	coord.ieta = 40;
+	coord.idepth=1;
+	swappedChs[29] = coord;
+
+	coord.iphi = 23;
+	coord.ieta = 34;
+	coord.idepth=0;
+	swappedChs[30] = coord;
+	coord.iphi = 23;
+	coord.ieta = 34;
+	coord.idepth=1;
+	swappedChs[31] = coord;
+	coord.iphi = 23;
+	coord.ieta = 35;
+	coord.idepth=0;
+	swappedChs[32] = coord;
+	coord.iphi = 23;
+	coord.ieta = 35;
+	coord.idepth=1;
+	swappedChs[33] = coord;
+
+/*	
 	coord.iphi = 27;
 	coord.ieta = 12;
 	coord.idepth = 0;
@@ -676,6 +839,8 @@ int initSwaps()
 	coord.ieta = 1;
 	coord.idepth = 1;
 	swappedChs[31] = coord;
+
+	*/
 }
 
 //
@@ -694,6 +859,26 @@ void fit(TH1D *hist)
 	hist->SetLineColor(kBlack);
 	myGaus->SetLineColor(kRed);
 	hist->Fit("myGaus", "R");
+}
+
+//
+//	Get the Swap Ratio
+//
+double getSwapRatio(TH1D *h, int iTS)
+{
+	double ratio = 0;
+	double qie_mean = h->GetFunction("myGaus")->GetParameter(1);
+	int qie_mean_Bin = floor(qie_mean)+1;
+	int qie_src_Bin = 23;
+
+	double eventsAtMean = h->GetBinContent(qie_mean_Bin)*
+		h->GetBinWidth(qie_mean_Bin);
+	double eventsAtSrc = h->GetBinContent(qie_src_Bin)*
+		h->GetBinWidth(qie_src_Bin);
+
+	ratio = eventsAtSrc/eventsAtMean;
+
+	return ratio;
 }
 
 //
@@ -728,21 +913,22 @@ int readTubesMap(string fileNameMap, TubesMap &map, string gcfFileName,
 		counter++;
 	}
 
-	string tubeName, wedgeName;
+	string tubeName, wedgeName, swaste;
 	int eta, phi, tubeStart, tubeEnd, iwaste;
 	char groove;
 
 	counter = 0;
 	while (mapFile >> tubeName)
 	{
-		mapFile >> wedgeName
-			>> eta >> eta >> phi >> tubeStart >> tubeEnd >> groove;
+		mapFile >> wedgeName >> iwaste >> swaste
+			>> eta >> eta >> phi >> iwaste >> iwaste 
+			>> tubeStart >> tubeEnd >> groove;
 
 		int iphi = (phi-1)/2;
 		int ieta = abs(eta) - 29;
 		int checkRBX, checkPhi, checkEta, checkTubeNum;
 		char tubeType;
-		sscanf(tubeName.c_str(), "HFM%d_ETA%d_PHI%d_T%d%c%*[^]",
+		sscanf(tubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
 				&checkRBX, &checkEta, &checkPhi, &checkTubeNum,
 				&tubeType);
 		int iTubeType = 0;
