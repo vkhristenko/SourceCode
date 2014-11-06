@@ -46,10 +46,10 @@ void genPlots(string results_AvgQ, string results_Fixed,
 	plotProfiles(results_AvgQ, results_Fixed, results_Extr, string("D2_Avg"),
 			string("SFoverSBvsPHI"));
 */	
-//	plotGraphs(results_AvgQ, results_Fixed, results_Extr, string(""), 
-//			string("SignalvsGain"));
-	plotSignalRatiosForDiffMethods(results_AvgQ, results_Fixed,
-			results_Extr, string(""), string("SignalRatios"));
+	plotGraphs(results_AvgQ, results_Fixed, results_Extr, string(""), 
+			string("SignalvsGain"));
+//	plotSignalRatiosForDiffMethods(results_AvgQ, results_Fixed,
+//			results_Extr, string(""), string("SignalRatios"));
 //	plot2D(results_AvgQ);
 }
 
@@ -228,8 +228,8 @@ void plotGraphs(string results_AvgQ, string results_Fixed,
 
 	TMultiGraph *mg = new TMultiGraph();
 	mg->Add(gSPEvsGain_AvgQ);
-	mg->Add(gSPEvsGain_Fixed);
-	mg->Add(gSPEvsGain_Extr);
+//	mg->Add(gSPEvsGain_Fixed);
+//	mg->Add(gSPEvsGain_Extr);
 	mg->Draw("ap");
 	legend->Draw();
 	cSPEvsGain->Update();

@@ -8,7 +8,22 @@
 #define NUMBINS 32
 #define PEDCUT_1TS 10
 #define PEDCUT_2TS 18
-#define NUMSWAPS 32
+
+#define GEVPER25NS 744.6E-6
+
+//
+//	Define SOurce Activity Correction
+//	This value shows how much source strength decreased from November 2013
+//	till the month the sourcing data has been taken
+//
+#define SOURCEACTIVITYCORRECTION 0.92398
+
+//
+//	Adapt this for either HFP or HFM
+//	#swaps in HFP is 34
+//	#swaps in HFM is 32
+//
+#define NUMSWAPS 34
 
 #include "map.cc"
 
@@ -190,6 +205,10 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	out->cd("Histos");
 	TH1D *hSPE_UNCORR;
 	TH1D *hSPE_CORR;
+	TH1D *hSignal_OV2 = new TH1D("Signal_OV2", "Signal OV2", 10000, 0, 0.02);
+	TH1D *hADC2GeV_OV2 = new TH1D("ADC2GeV_OV2", "ADC2GeV OV2", 10000, 0, 2);
+	TH1D *hADC2GeV_OV2_CORR = new TH1D("ADC2GeV_OV2_CORR", "ADC2GeV OV2 CORR", 
+			10000, 0, 2);
 	if (numTS==1)
 	{
 		hSPE_UNCORR = new TH1D("Signals_UNCORR", "Signals_UNCORR",100, 0, 0.02);
@@ -258,9 +277,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					continue;
 				}
 
-				if (numTS==2)
-					if ((2*iphi+1)==51 && (ieta+29)==31)
-						continue;
+//				if (numTS==2)
+//					if ((2*iphi+1)==51 && (ieta+29)==31)
+//						continue;
 
 				//
 				//	Get a Sig histo

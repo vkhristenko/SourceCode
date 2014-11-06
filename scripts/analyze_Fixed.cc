@@ -8,7 +8,22 @@
 #define NUMBINS 32
 #define PEDCUT_1TS 10
 #define PEDCUT_2TS 18
-#define NUMSWAPS 32
+
+//
+//	Adapt this for either HFP or HFM
+//	#swaps in HFP is 34
+//	#swaps in HFM is 32
+//
+#define NUMSWAPS 34
+
+#define GEVPER25NS 744.6E-6
+
+//
+//	Define Source Activity Correction
+//	This value shows how much source strength decreased from November 2013
+//	till the month the sourcing data has been taken
+//
+#define SOURCEACTIVITYCORRECTION 0.92398
 
 #include "map.cc"
 
@@ -175,6 +190,10 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 
 	TH1D *hSPE_UNCORR;
 	TH1D *hSPE_CORR;
+	TH1D *hSignal_OV2 = new TH1D("Signal_OV2", "Signal_OV2", 10000, 0, 0.02);
+	TH1D *hADC2GeV_OV2 = new TH1D("ADC2GeV_OV2", "ADC2GeV OV2",	10000, 0, 2);
+	TH1D *hADC2GeV_OV2_CORR = new TH1D("ADC2GeV_OV2_CORR", "ADC2GeV OV2 CORR",
+			10000, 0, 2);
 	if (numTS==1)
 	{
 		hSPE_UNCORR = new TH1D("Signals_UNCORR", "Signals_UNCORR",100, 0, 0.02);
@@ -243,9 +262,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					continue;
 				}
 
-				if (numTS==2)
-					if ((2*iphi+1)==51 && (ieta+29)==31)
-						continue;
+//				if (numTS==2)
+//					if ((2*iphi+1)==51 && (ieta+29)==31)
+//						continue;
 
 				//
 				//	Get a Sig histo
@@ -431,6 +450,28 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					gSPEvsGain->SetPoint(counter_Gain,
 							gainMap[iphi][ieta][idepth].gain_OV1P100, 
 							speQ_CORR);
+
+				double signal = speQ_CORR;
+				double S1G1(0), signal_OV2(0), adc2GeV(0), adc2GeV_CORR(0);
+				double gain_OV1 = gainMap[iphi][ieta][idepth].gain_OV1;
+				double gain_OV1P100 = gainMap[iphi][ieta][idepth].gain_OV1P100;
+				double gain_OV2 = gainMap[iphi][ieta][idepth].gain_OV2;
+				if (numTS==1)
+				{	
+					S1G1 = signal/gain_OV1;
+					signal_OV2 = signal/gain_OV1*gain_OV2;
+					adc2GeV = GEVPER25NS/signal_OV2;
+					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
+				}
+				else if(numTS == 2)
+				{
+					S1G1 = signal/gain_OV1P100/2.;
+					signal_OV2 = S1G1*gain_OV2;
+					adc2GeV = GEVPER25NS/signal_OV2;
+					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
+				}
+				hADC2GeV_OV2->Fill(adc2GeV);
+				hADC2GeV_OV2_CORR->Fill(adc2GeV_CORR);
 
 				counter_Gain++;
 			}

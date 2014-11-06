@@ -9,6 +9,16 @@
 #define PEDCUT_1TS 10
 #define PEDCUT_2TS 18
 
+double GEVPER25NS[NUMDEPTHS] = { 744.6E-6, 706.E-6};
+
+//	
+//	Define Source Activity Correction. 
+//	This value shows how much source strength decreased from November 2013
+//	till the month the sourcing data has been taken
+//
+#define SOURCEACTIVITYCORRECTION 0.92398
+//#define SOURCEACTIVITYCORRECTION 0.88117
+
 //
 //	Adapt this for either HFP or HFM
 //	#swaps in HFP is 34
@@ -193,6 +203,18 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	out->cd("Histos");
 	TH1D *hSPE_UNCORR;
 	TH1D *hSPE_CORR;
+	TH1D *hSignal_OV2[NUMDEPTHS];
+	hSignal_OV2[0] = new TH1D("Signal_OV2_D1", "Signal OV2_D1", 10000, 0, 0.02);
+	hSignal_OV2[1] = new TH1D("Signal_OV2_D2", "Signal OV2_D2", 10000, 0, 0.02);
+	TH1D *hADC2GeV_OV2[NUMDEPTHS];
+	hADC2GeV_OV2[0] = new TH1D("ADC2GeV_OV2_D1", "ADC2GeV OV2_D1", 10000, 0, 2);
+	hADC2GeV_OV2[1] = new TH1D("ADC2GeV_OV2_D2", "ADC2GeV OV2_D2", 10000, 0, 2);
+	TH1D *hADC2GeV_OV2_CORR[NUMDEPTHS];
+	hADC2GeV_OV2_CORR[0] = new TH1D("ADC2GeV_OV2_CORR_D1", "ADC2GeV OV2 CORR_D1",
+			10000, 0, 2);
+	hADC2GeV_OV2_CORR[1] = new TH1D("ADC2GeV_OV2_CORR_D1_D2", 
+			"ADC2GeV OV2 CORR_D2", 10000, 0, 2);
+	TH1D *hGainsRatio = new TH1D("GainsRatio", "Gains Ratio", 10000, 0, 1);
 	if(numTS==1) 
 	{
 		hSPE_UNCORR = new TH1D("Signals_UNCORR", "Signals_UNCORR",100, 0, 0.02);
@@ -452,6 +474,32 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 							gainMap[iphi][ieta][idepth].gain_OV1P100, 
 							speQ_CORR);
 
+				double signal = speQ_CORR;
+				double S1G1(0), signal_OV2(0), adc2GeV(0), adc2GeV_CORR(0);
+				double gain_OV1 = gainMap[iphi][ieta][idepth].gain_OV1;
+				double gain_OV1P100 = gainMap[iphi][ieta][idepth].gain_OV1P100;
+				double gain_OV2 = gainMap[iphi][ieta][idepth].gain_OV2;
+				double gainRatio(0);
+				if (numTS == 1)
+				{
+					S1G1 = signal/gain_OV1;
+					signal_OV2 = signal/gain_OV1*gain_OV2;
+					adc2GeV = GEVPER25NS[idepth]/signal_OV2;
+					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
+					gainRatio = gain_OV2/gain_OV1;
+				}
+				else if (numTS == 2)
+				{
+					S1G1 = signal/gain_OV1P100/2.;
+					signal_OV2 = S1G1*gain_OV2;
+					adc2GeV = GEVPER25NS[idepth]/signal_OV2;
+					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
+					gainRatio = gain_OV2/gain_OV1P100;
+				}
+				hSignal_OV2[idepth]->Fill(signal_OV2);
+				hADC2GeV_OV2[idepth]->Fill(adc2GeV);
+				hADC2GeV_OV2_CORR[idepth]->Fill(adc2GeV_CORR);
+				hGainsRatio->Fill(gainRatio);
 
 				counter_Gain++;
 			}
@@ -679,7 +727,7 @@ int initSwaps()
 	coord.idepth=1;
 	swappedChs[33] = coord;
 
-/*	
+	/*
 	coord.iphi = 27;
 	coord.ieta = 12;
 	coord.idepth = 0;
@@ -839,8 +887,8 @@ int initSwaps()
 	coord.ieta = 1;
 	coord.idepth = 1;
 	swappedChs[31] = coord;
-
-	*/
+*/
+	
 }
 
 //
