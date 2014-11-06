@@ -153,7 +153,8 @@ int main(int argc, char** argv)
 	string rootOutFileName = argv[3];
 	string fileNameMap = argv[4];
 	string swapsFileName = argv[5];
-	int iTS = atoi(argv[6]);
+	char hfSide = argv[6]
+	int iTS = atoi(argv[7]);
 
 
 	int globalEvents = 0;
