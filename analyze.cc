@@ -26,6 +26,8 @@
 #include "TMath.h"
 #include "TGraph.h"
 
+#include "scripts/readSwaps.cc"
+
 //
 //	Constants
 //
@@ -83,6 +85,7 @@ struct ServiceVariables
 	double *qBins_toUse;
 	double cutToUse;
 	int verbosity;
+	TSwaps swaps;
 };
 
 struct HistoOutput
@@ -149,7 +152,8 @@ int main(int argc, char** argv)
 	string listOfFiles = argv[2];
 	string rootOutFileName = argv[3];
 	string fileNameMap = argv[4];
-	int iTS = atoi(argv[5]);
+	string swapsFileName = argv[5];
+	int iTS = atoi(argv[6]);
 
 
 	int globalEvents = 0;
@@ -166,6 +170,7 @@ int main(int argc, char** argv)
 		service.qBins_toUse = qBins_2TS;
 	readTubesMap(fileNameMap, tubesMap, service);
 	initOutput(out, service, rootOutFileName);
+	readSwaps(swapsFileName, service.swaps, verbosity);
 	vector<string> &vInputFiles = readFiles(listOfFiles, service);
 
 	for (vector<string>::iterator it=vInputFiles.begin(); 
@@ -327,6 +332,17 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			srciTubeType = 1;
 		else 
 			cout << "### ERROR: Wrong Tube Type!" << endl;
+
+		//
+		//	Check if current tube is in the list of Swapped
+		//	If it is, get the srciPhi, srciEta to be equal to new coords
+		//
+		int iswap = isTubeSwap(service.swaps, srciPhi, srciEta);
+		if (iswap>0)
+		{
+			srciPhi = service.swaps.tubeSwaps[iswap].f_iphi;
+			srciEta = service.swaps.tubeSwaps[iswap].f_ieta;
+		}
 		int srciiEta = abs(srciEta)-29;
 		int srciiPhi = (srciPhi-1)/2;
 
@@ -346,9 +362,21 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 		//
 		for (int iCh=0; iCh<raw.numChannels; iCh++)
 		{
-			int iphi = raw.phi[iCh];	int iiphi=(iphi-1)/2;
-			int ieta = raw.eta[iCh]; int iieta=abs(ieta)-29;
-			int depth = raw.depth[iCh]; int idepth=depth-1;
+			int iphi = raw.phi[iCh];
+			int ieta = abs(raw.eta[iCh]); 
+			int depth = raw.depth[iCh]; 
+
+			iswap = isChSwap(service.swaps, iphi, ieta, depth);
+			if (iswap>0)
+			{
+				iphi = service.swaps.chSwaps[iswap].f_iphi;
+				ieta = service.swaps.chSwaps[iswap].f_ieta;
+				depth = service.swaps.chSwaps[iswap].f_depth;
+			}
+			
+			int iiphi = (iphi-1)/2;
+			int iieta = abs(ieta) - 29;
+			int idepth = depth-1;
 
 			//
 			//	If this is a channel with Source
