@@ -86,6 +86,7 @@ struct ServiceVariables
 	double cutToUse;
 	int verbosity;
 	TSwaps swaps;
+	int hfSide;
 };
 
 struct HistoOutput
@@ -153,7 +154,7 @@ int main(int argc, char** argv)
 	string rootOutFileName = argv[3];
 	string fileNameMap = argv[4];
 	string swapsFileName = argv[5];
-	char hfSide = argv[6]
+	int hfSide = atoi(argv[6]);
 	int iTS = atoi(argv[7]);
 
 
@@ -165,6 +166,7 @@ int main(int argc, char** argv)
 	service.qBins_toUse = qBins_1TS;
 	service.cutToUse = PEDCUT_2TS;
 	service.verbosity = verbosity;
+	service.hfSide = hfSide;
 	if (iTS==1)
 		service.qBins_toUse = qBins_1TS;
 	else if (iTS==2)
@@ -324,9 +326,15 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 
 		int srciEta, srciPhi, srciTubeType, srcWedge, srcTubeNumber;
 		char srcTubeType;
-		sscanf(sourceTubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
-				&srcWedge, &srciEta, &srciPhi, &srcTubeNumber,
-				&srcTubeType);
+		if (service.hfSide==0)
+			sscanf(sourceTubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
+					&srcWedge, &srciEta, &srciPhi, &srcTubeNumber,
+					&srcTubeType);
+		else if (service.hfSide==1)
+			sscanf(sourceTubeName.c_str(), "HFM%d_ETA%d_PHI%d_T%d%c%*[^]",
+					&srcWedge, &srciEta, &srciPhi, &srcTubeNumber,
+					&srcTubeType);
+
 		if (srcTubeType=='A' || srcTubeType=='_')
 			srciTubeType = 0;
 		else if (srcTubeType=='B')
@@ -385,8 +393,8 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			if (srciEta==ieta && srciPhi==iphi)
 			{
 				if (service.verbosity>1)
-					cout << "### iphi=" << iphi << "  ieta=" << ieta << "  depth="
-						<< depth << endl;
+					cout << "### iphi=" << iphi << "  ieta=" << ieta 
+						<< "  depth=" << depth << endl;
 				double speSignal = computeSPESignal(iCh, raw, service);
 
 				//
@@ -690,17 +698,29 @@ int readTubesMap(string fileNameMap, TubesMap &map, ServiceVariables &service)
 	int counter = 0;
 	while (mapFile >> tubeName)
 	{
-		mapFile >> wedgeName >> iwaste >> swaste 
-			>> ieta >> ieta >> iphi >> iwaste >> iwaste 
-			>> tubeStart >> tubeEnd >> groove;
+		if (service.hfSide==0)
+			mapFile >> wedgeName >> iwaste >> swaste 
+				>> ieta >> ieta >> iphi >> iwaste >> iwaste 
+				>> tubeStart >> tubeEnd >> groove;
+		else if (service.hfSide==1)
+			mapFile >> wedgeName
+				>> ieta >> ieta >> iphi
+				>> tubeStart >> tubeEnd >> groove;
 
 		int iiphi = (iphi-1)/2;
 		int iieta = abs(ieta) - 29;
 		int checkRBX, checkPhi, checkEta, checkTubeNumber;
 		char tubeType;
-		sscanf(tubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
-				&checkRBX, &checkEta, &checkPhi, &checkTubeNumber,
-				&tubeType);
+		
+		if (service.hfSide==0)
+			sscanf(tubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
+					&checkRBX, &checkEta, &checkPhi, &checkTubeNumber,
+					&tubeType);
+		else if (service.hfSide==1)
+			sscanf(tubeName.c_str(), "HFM%d_ETA%d_PHI%d_T%d%c%*[^]",
+					&checkRBX, &checkEta, &checkPhi, &checkTubeNumber,
+					&tubeType);
+
 		int iTubeType = 0;
 		if (tubeType=='A' || tubeType=='_')
 			iTubeType = 0;
