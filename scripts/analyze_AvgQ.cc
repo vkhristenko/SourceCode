@@ -182,6 +182,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	TH2D *hPedSigma_S[NUMDEPTHS];
 	TH2D *hPedSigma_B[NUMDEPTHS];
 	TH2D *hSwapRatio[NUMDEPTHS];
+	TH2D *hADC2GeV_Map_OV2[NUMDEPTHS];
 	char someName[200];
 	for (int i=0; i<2; i++)
 	{
@@ -199,6 +200,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 
 		sprintf(someName, "SwapRatio_D%d", i+1);
 		hSwapRatio[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
+
+		sprintf(someName, "ADC2GeV_Map_OV2_D%d", i+1);
+		hADC2GeV_Map_OV2[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
 	}
 	out->cd("Histos");
 	TH1D *hSPE_UNCORR;
@@ -271,7 +275,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				//
 				//	Check if this channel is among swaps...
 				//
-				for (int iswap=0; iswap<NUMSWAPS; iswap++)
+/*				for (int iswap=0; iswap<NUMSWAPS; iswap++)
 					if (swappedChs[iswap].iphi==(2*iphi+1) && 
 							swappedChs[iswap].ieta==(ieta+29) &&
 							swappedChs[iswap].idepth==idepth)
@@ -281,7 +285,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					checkSkips++;
 					continue;
 				}
-
+*/
 //				if (numTS==2)
 //					if ((2*iphi+1)==51 && (ieta+29)==31)
 //						continue;
@@ -496,6 +500,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
 					gainRatio = gain_OV2/gain_OV1P100;
 				}
+				hADC2GeV_Map_OV2[idepth]->Fill(2*iphi+1, ieta+29, adc2GeV_CORR);
 				hSignal_OV2[idepth]->Fill(signal_OV2);
 				hADC2GeV_OV2[idepth]->Fill(adc2GeV);
 				hADC2GeV_OV2_CORR[idepth]->Fill(adc2GeV_CORR);

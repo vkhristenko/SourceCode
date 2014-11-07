@@ -347,7 +347,7 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 		//	If it is, get the srciPhi, srciEta to be equal to new coords
 		//
 		int iswap = isTubeSwap(service.swaps, srciPhi, srciEta);
-		if (iswap>0)
+		if (iswap>=0)
 		{
 			srciPhi = service.swaps.tubeSwaps[iswap].f_iphi;
 			srciEta = service.swaps.tubeSwaps[iswap].f_ieta;
@@ -376,7 +376,7 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			int depth = raw.depth[iCh]; 
 
 			iswap = isChSwap(service.swaps, iphi, ieta, depth);
-			if (iswap>0)
+			if (iswap>=0)
 			{
 				iphi = service.swaps.chSwaps[iswap].f_iphi;
 				ieta = service.swaps.chSwaps[iswap].f_ieta;
