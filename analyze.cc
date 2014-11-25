@@ -87,6 +87,7 @@ struct ServiceVariables
 	int verbosity;
 	TSwaps swaps;
 	int hfSide;
+	int iTS;
 };
 
 struct HistoOutput
@@ -96,6 +97,9 @@ struct HistoOutput
 	TH1D *hRAW1D_F_wSrc[NUMPHIS][NUMETAS][NUMDEPTHS][NUMTUBETYPES];
 	TH1D *hRAW1D_B_wSrc[NUMPHIS][NUMETAS][NUMDEPTHS][NUMTUBETYPES];
 	TH1D *hRAW1D_NoSrc[NUMPHIS][NUMETAS][NUMDEPTHS];
+	TH1D *hRAW1D_B23_wSrc[NUMPHIS][NUMETAS][NUMDEPTHS][NUMTUBETYPES];
+	TH1D *hRAW1D_F3B3_wSrc[NUMPHIS][NUMETAS][NUMDEPTHS][NUMTUBETYPES];
+	TH1D *hRAW1D_F3B4_wSrc[NUMPHIS][NUMETAS][NUMDEPTHS][NUMTUBETYPES];
 
 	TH1D *hMeansOfPED[NUMPHIS][NUMETAS][NUMDEPTHS];
 	TH1D *hRMSsOfPED[NUMPHIS][NUMETAS][NUMDEPTHS];
@@ -171,6 +175,7 @@ int main(int argc, char** argv)
 		service.qBins_toUse = qBins_1TS;
 	else if (iTS==2)
 		service.qBins_toUse = qBins_2TS;
+	service.iTS = iTS;
 	readTubesMap(fileNameMap, tubesMap, service);
 	initOutput(out, service, rootOutFileName);
 	readSwaps(swapsFileName, service.swaps, verbosity);
@@ -227,6 +232,48 @@ int main(int argc, char** argv)
 						->GetBinWidth(iBin+1);
 						out.hRAW1D_wSrc[iiphi][iieta][idepth][iTubeType]
 							->SetBinContent(iBin+1, newContent);
+
+						newContent = 
+							out.hRAW1D_F_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinContent(iBin+1)/
+							out.hRAW1D_F_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinWidth(iBin+1);
+						out.hRAW1D_F_wSrc[iiphi][iieta][idepth][iTubeType]
+							->SetBinContent(iBin+1, newContent);
+
+						newContent = 
+							out.hRAW1D_B_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinContent(iBin+1)/
+							out.hRAW1D_B_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinWidth(iBin+1);
+						out.hRAW1D_B_wSrc[iiphi][iieta][idepth][iTubeType]
+							->SetBinContent(iBin+1, newContent);
+
+						newContent = 
+							out.hRAW1D_B23_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinContent(iBin+1)/
+							out.hRAW1D_B23_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinWidth(iBin+1);
+						out.hRAW1D_B23_wSrc[iiphi][iieta][idepth][iTubeType]
+							->SetBinContent(iBin+1, newContent);
+
+						newContent = 
+							out.hRAW1D_F3B3_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinContent(iBin+1)/
+							out.hRAW1D_F3B3_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinWidth(iBin+1);
+						out.hRAW1D_F3B3_wSrc[iiphi][iieta][idepth][iTubeType]
+							->SetBinContent(iBin+1, newContent);
+
+						newContent = 
+							out.hRAW1D_F3B4_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinContent(iBin+1)/
+							out.hRAW1D_F3B4_wSrc[iiphi][iieta][idepth][iTubeType]
+							->GetBinWidth(iBin+1);
+						out.hRAW1D_F3B4_wSrc[iiphi][iieta][idepth][iTubeType]
+							->SetBinContent(iBin+1, newContent);
+
+
 
 						if (iTubeType==0)
 						{
@@ -343,6 +390,16 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			cout << "### ERROR: Wrong Tube Type!" << endl;
 
 		//
+		//	For channels with Src Driver Error
+		//	if it is either srciEta==29, then use tube B for acquiring BG,
+		//	or if srciEta==39, then use 38 or 40, depending on the avail of 40.
+		//
+		int useiTubeType=0;
+		if (isSrcError(service.swaps, srciPhi, srciEta, service.iTS)==1
+				&& srciEta==29)
+			useiTubeType = 1;
+
+		//
 		//	Check if current tube is in the list of Swapped
 		//	If it is, get the srciPhi, srciEta to be equal to new coords
 		//
@@ -408,6 +465,40 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 							out.hRAW1D_B_wSrc[iiphi][iieta][idepth][srciTubeType],
 							service);
 
+				double delta = 
+					(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd - 
+					 map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart);
+
+				if (map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart <
+						raw.reelPos && 
+						(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart +
+						delta*2./3.)>raw.reelPos)
+					addHisto(iCh, raw, 
+						out.hRAW1D_B23_wSrc[iiphi][iieta][idepth][srciTubeType],
+							service);
+
+				//
+				//	Add Histos, but here take margins into consideration
+				//	1. tubeStart+300 < reel pos < tubeEnd-300
+				//	2. tubeStart+300 < reel pos < tubeEnd-400
+				//
+				if ((map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart+300) <
+						raw.reelPos &&
+						(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd-300)
+						> raw.reelPos)
+					addHisto(iCh, raw, 
+						out.hRAW1D_F3B3_wSrc[iiphi][iieta][idepth][srciTubeType],
+						service);
+
+				if ((map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart+300) <
+						raw.reelPos &&
+						(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd-400)
+						> raw.reelPos)
+					addHisto(iCh, raw, 
+						out.hRAW1D_F3B3_wSrc[iiphi][iieta][idepth][srciTubeType],
+						service);
+
+
 				if (depth==1)
 				{
 					
@@ -470,8 +561,20 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 				//	This is a channel without a source,
 				//	apply geometric isolation and fill the NoSrc Histo
 				//
-				if (!(srciPhi==iphi && srciTubeType==0 && ((srciEta==29 && ieta>=34 && ieta<=41) 
+				if (!(srciPhi==iphi && srciTubeType==useiTubeType 
+							&& ((srciEta==29 
+							&& ieta>=34 && ieta<=41) 
 							|| (srciEta==39 && ieta>=29 && ieta<34))))
+					continue;
+
+				//
+				//	Also, make sure that our source is inside the detector and 
+				//	not in the fibers outside the detector
+				//
+				if (map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart >= 
+						raw.reelPos || 
+						map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd <=
+						raw.reelPos)
 					continue;
 
 				addHisto(iCh, raw, 
@@ -574,6 +677,9 @@ void initOutput(HistoOutput &out, ServiceVariables &service,
 	gDirectory->mkdir("1D");
 	gDirectory->mkdir("1D_F");
 	gDirectory->mkdir("1D_B");
+	gDirectory->mkdir("1D_B23");
+	gDirectory->mkdir("1D_F3B3");
+	gDirectory->mkdir("1D_F3B4");
 
 	gDirectory->mkdir("SPESignals");
 	gDirectory->cd("SPESignals");
@@ -618,6 +724,25 @@ void initOutput(HistoOutput &out, ServiceVariables &service,
 							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
 					out.hRAW1D_B_wSrc[iiphi][iieta][idepth][iTubeType] = new 
 						TH1D(histName, histName, 32, service.qBins_toUse);
+
+					out.rootFile->cd("SRC/1D_B23");
+					sprintf(histName, "1D_B23_wSrc_%d_PHI%d_ETA%d_D%d",
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.hRAW1D_B23_wSrc[iiphi][iieta][idepth][iTubeType] = new 
+						TH1D(histName, histName, 32, service.qBins_toUse);
+
+					out.rootFile->cd("SRC/1D_F3B3");
+					sprintf(histName, "1D_F3B3_wSrc_%d_PHI%d_ETA%d_D%d",
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.hRAW1D_F3B3_wSrc[iiphi][iieta][idepth][iTubeType] = new 
+						TH1D(histName, histName, 32, service.qBins_toUse);
+
+					out.rootFile->cd("SRC/1D_F3B4");
+					sprintf(histName, "1D_F3B4_wSrc_%d_PHI%d_ETA%d_D%d",
+							iTubeType, 2*iiphi+1, iieta+29, idepth+1);
+					out.hRAW1D_F3B4_wSrc[iiphi][iieta][idepth][iTubeType] = new 
+						TH1D(histName, histName, 32, service.qBins_toUse);
+
 
 					out.rootFile->cd("SRC/SPESignals/VsOrbit");
 					sprintf(histName, "SPEsigVsOrbit_%d_PHI%d_ETA%d_D%d",
