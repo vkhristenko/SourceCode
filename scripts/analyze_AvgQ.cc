@@ -1,6 +1,32 @@
 
 
 
+#include <signal.h>
+#include <iostream>
+#include <fstream>
+#include <stdlib.h>
+#include <stdint.h>
+#include <time.h>
+#include <sstream>
+#include <vector>
+#include <math.h>
+#include <string>
+
+#include "TROOT.h"
+#include "TApplication.h"
+#include "TFile.h"
+#include "TTree.h"
+#include "TH1D.h"
+#include "TH2D.h"
+#include "TProfile.h"
+#include "TSystem.h"
+#include "TMath.h"
+#include "TGraph.h"
+#include "TF1.h"
+
+using namespace std;
+using namespace ROOT;
+
 #define NUMPHIS 36
 #define NUMETAS 13
 #define NUMTUBETYPES 2
@@ -9,14 +35,16 @@
 #define PEDCUT_1TS 10
 #define PEDCUT_2TS 18
 
-double GEVPER25NS[NUMDEPTHS] = { 744.6E-6, 706.E-6};
-
+double GEVPER25NS[NUMDEPTHS] = { 744E-6, 706E-6};
 //	
 //	Define Source Activity Correction. 
 //	This value shows how much source strength decreased from November 2013
 //	till the month the sourcing data has been taken
+//	[0] - HFP
+//	[1] - HFM
 //
-#define SOURCEACTIVITYCORRECTION 0.92398
+double SOURCEACTIVITYCORRECTION[2] = {0.91, 0.876};
+//#define SOURCEACTIVITYCORRECTION 0.92398
 //#define SOURCEACTIVITYCORRECTION 0.88117
 
 //
@@ -28,6 +56,7 @@ double GEVPER25NS[NUMDEPTHS] = { 744.6E-6, 706.E-6};
 #define NUMSWAPS 34
 
 #include "map.cc"
+#include "readSwaps.cc"
 
 Double_t qBins_1TS[NUMBINS+1] = {
 	0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 17.,
@@ -68,19 +97,24 @@ struct TubesMap
 	SourceTubeInfo tubes[NUMPHIS][NUMETAS][NUMTUBETYPES];
 };
 
-void analyze_AvgQ(string inFileName, string outFileName, string outTxtFileName, 
+
+
+void analyze_AvgQ(int hfSide, string inFileName, string outFileName, 
+		string outTxtFileName, 
 		string mapFileName, string gcfFile, string eMapFileName,
-		string gainMapFileName, int numTS)
+		string gainMapFileName, string swapsFileName, int numTS)
 {
-	analyze(inFileName, outFileName, outTxtFileName,
-			mapFileName, gcfFile, eMapFileName, gainMapFileName, numTS);
+	analyze(hfSide, inFileName, outFileName, outTxtFileName,
+			mapFileName, gcfFile, eMapFileName, gainMapFileName, 
+			swapsFileName, numTS);
 }
 
 double getSwapRatio(TH1D *h, int iTS);
 
-void analyze(string inFileName, string outFileName, string outTxtFileName, 
+void analyze(int hfSide, string inFileName, string outFileName, string outTxtFileName, 
 		string mapFileName, string gcfFile, 
-		string eMapFileName, string gainMapFileName, int numTS)
+		string eMapFileName, string gainMapFileName,
+		string swapsFileName, int numTS)
 {
 	
 	//	Open up the In File
@@ -91,9 +125,12 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	//	Get Electronics and Gain Maps
 	//
 	TEMap eMap;
-	getMap(eMapFileName, eMap);
+	getMap(hfSide, eMapFileName, eMap);
 	TGainMap gainMap;
-	getGainMap(gainMapFileName, gainMap, eMap);	
+	getGainMap(hfSide, gainMapFileName, gainMap, eMap);	
+	TSwaps swaps;
+	readSwaps(swapsFileName, swaps, 0);
+
 /*	for (int iphi=0; iphi<NUMPHIS; iphi++)
 		for (int ieta=0; ieta<NUMETAS; ieta++)
 			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
@@ -108,6 +145,8 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	//	Create the Output File, initialzie whatever
 	//
 	ofstream outTxt(outTxtFileName.c_str());
+	ofstream outTxt_4345("out_4345.txt");
+	bool ooo = true;
 	TFile *out = new TFile(outFileName.c_str(), "recreate");
 	out->mkdir("Profiles");
 	out->mkdir("Histos");
@@ -120,6 +159,8 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	TProfile *pSPEvsPHI[NUMETAS][NUMDEPTHS];
 	TProfile *pSFSBvsPHI[NUMETAS][NUMDEPTHS];
 	TProfile *pSFoverSB[NUMDEPTHS];
+	TProfile *pSB23toS[NUMDEPTHS];
+	TProfile *pSB23toS_D12;
 	TProfile *pSFoverSB_D12;
 	TProfile *pSFSBvsPHI_Avg[NUMDEPTHS];
 	pSPEvsETA_UNCORR[0] = new TProfile("SignalvsETA_D1_UNCORR", 
@@ -148,6 +189,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 			72, 0, 72);
 	pSFSBvsPHI_Avg[1] = new TProfile("SFoverSBvsPHI_D2_Avg", "SFoverSBvsPHI_D2_Avg",
 			72, 0, 72);
+	pSB23toS[0] = new TProfile("SB23toS_D1", "SB23toS_D1", 13, 29, 42);
+	pSB23toS[1] = new TProfile("SB23toS_D2", "SB23toS_D2", 13, 29, 42);
+	pSB23toS_D12 = new TProfile("SB23toS_D12", "SB23toS_D12", 13, 29, 42);
 
 	gDirectory->mkdir("SPEvsPHI");
 	gDirectory->mkdir("SFSBvsPHI");
@@ -173,6 +217,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	gDirectory->mkdir("1D");
 	gDirectory->mkdir("1D_F");
 	gDirectory->mkdir("1D_B");
+	gDirectory->mkdir("1D_B23");
 	gDirectory->cd("1D");
 	gDirectory->mkdir("SIG");
 	gDirectory->mkdir("BACK");
@@ -207,6 +252,18 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	out->cd("Histos");
 	TH1D *hSPE_UNCORR;
 	TH1D *hSPE_CORR;
+	TH1D *hSignal_4345[NUMDEPTHS];
+	TH1D *hSignal_UNCORR_4345[NUMDEPTHS];
+	hSignal_4345[0] = new TH1D("Signal_4345_D1", "Signal 43&45 D1", 
+			10000, 0, 0.02);
+	hSignal_4345[1] = new TH1D("Signal_4345_D2", "Signal 43&45 D2", 
+			10000, 0, 0.02);
+	hSignal_UNCORR_4345[0] = new TH1D("Signal_UNCORR_4345_D1", 
+			"Signal UNCORR 43&45 D1", 
+			10000, 0, 0.02);
+	hSignal_UNCORR_4345[1] = new TH1D("Signal_UNCORR_4345_D2", 
+			"Signal UNCORR 43&45 D2", 
+			10000, 0, 0.02);
 	TH1D *hSignal_OV2[NUMDEPTHS];
 	hSignal_OV2[0] = new TH1D("Signal_OV2_D1", "Signal OV2_D1", 10000, 0, 0.02);
 	hSignal_OV2[1] = new TH1D("Signal_OV2_D2", "Signal OV2_D2", 10000, 0, 0.02);
@@ -230,10 +287,14 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 		hSPE_CORR = new TH1D("Signals_CORR", "Signals_CORR", 1000, 0, 0.2);
 	}
 	TH1D *hSFoverSB[NUMDEPTHS];
+	TH1D *hSB23toS[NUMDEPTHS];
 	hSFoverSB[0] = new TH1D("SFoverSB_D1", "SFoverSB_D1", 100, 0, 2);
 	hSFoverSB[1] = new TH1D("SFoverSB_D2", "SFoverSB_D2", 100, 0, 2);
+	hSB23toS[0] = new TH1D("SB23toS_D1", "SB23toS_D1", 100, 0, 2);
+	hSB23toS[1] = new TH1D("SB23toS_D2", "SB23toS_D2", 100, 0, 2);
 	TH1D *hSFoverSB_D12 = new TH1D("SFoverSB_D12", "SFoverSB_D12",
 			100, 0, 2);
+	TH1D *hSB23toS_D12 = new TH1D("SB23toS_D12", "SB23toS_D12", 100, 0, 2);
 	TGraph *gSPEvsGain = new TGraph();
 	gSPEvsGain->SetTitle("SignalvsGain");
 	gSPEvsGain->SetName("SignalvsGain");
@@ -253,8 +314,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	//	Read in GCF and Tubes Map
 	//
 	TubesMap map;
-	readTubesMap(mapFileName, map, gcfFile, 0);
-	int iTubeType = 0;
+	readTubesMap(hfSide, mapFileName, map, gcfFile, 0);
 	int checkSkips = 0;
 
 	vector<string> vStr;
@@ -264,6 +324,9 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 	int counter_Gain = 0;
 	char histName[200];
 	bool checkSwap = false;
+
+	//	Sorry for no indentation here 
+	for (int iTubeType=0; iTubeType<NUMTUBETYPES; iTubeType++)
 	for (int iphi=0; iphi<NUMPHIS; iphi++)
 		for (int ieta=0; ieta<NUMETAS; ieta++)
 			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
@@ -272,10 +335,10 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				cout << "### Processing: " << 2*iphi+1 << "  " << ieta+29
 					<< idepth+1 << endl;
 
-				//
+/*				//
 				//	Check if this channel is among swaps...
 				//
-/*				for (int iswap=0; iswap<NUMSWAPS; iswap++)
+				for (int iswap=0; iswap<NUMSWAPS; iswap++)
 					if (swappedChs[iswap].iphi==(2*iphi+1) && 
 							swappedChs[iswap].ieta==(ieta+29) &&
 							swappedChs[iswap].idepth==idepth)
@@ -286,16 +349,19 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					continue;
 				}
 */
-//				if (numTS==2)
-//					if ((2*iphi+1)==51 && (ieta+29)==31)
-//						continue;
+				if (swaps.numSrcErrors>0)
+				{
+					int iswap = isSrcError(swaps, 2*iphi+1, ieta+29, numTS);
+					if (iswap==1)
+						continue;
+				}
 
 				//
 				//	Get a Sig histo
 				//
-				sprintf(histName, "1D_wSrc_0_PHI%d_ETA%d_D%d",
-						2*iphi+1, ieta+29, idepth+1);
-				in->cd("SRC/1D");
+				sprintf(histName, "1D_F3B3_wSrc_%d_PHI%d_ETA%d_D%d",
+						iTubeType, 2*iphi+1, ieta+29, idepth+1);
+				in->cd("SRC/1D_F3B3");
 				TH1D *hRAW_S = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S->GetEntries()<100)
 					continue;
@@ -303,8 +369,8 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				//
 				//	Get a Sig_F histo
 				//
-				sprintf(histName, "1D_F_wSrc_0_PHI%d_ETA%d_D%d",
-						2*iphi+1, ieta+29, idepth+1);
+				sprintf(histName, "1D_F_wSrc_%d_PHI%d_ETA%d_D%d",
+						iTubeType, 2*iphi+1, ieta+29, idepth+1);
 				in->cd("SRC/1D_F");
 				TH1D *hRAW_S_F = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S_F->GetEntries()<100)
@@ -313,8 +379,8 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				//
 				//	Get a Sig_B histo
 				//
-				sprintf(histName, "1D_B_wSrc_0_PHI%d_ETA%d_D%d",
-						2*iphi+1, ieta+29, idepth+1);
+				sprintf(histName, "1D_B_wSrc_%d_PHI%d_ETA%d_D%d",
+						iTubeType, 2*iphi+1, ieta+29, idepth+1);
 				in->cd("SRC/1D_B");
 				TH1D *hRAW_S_B = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S_B->GetEntries()<100)
@@ -328,6 +394,16 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 						2*iphi+1, ieta+29, idepth+1);
 				TH1D *hRAW_B = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_B->GetEntries()<100)
+					continue;
+
+				//
+				//	Get a Sig_B23 histo
+				//
+				sprintf(histName, "1D_B23_wSrc_%d_PHI%d_ETA%d_D%d",
+						iTubeType, 2*iphi+1, ieta+29, idepth+1);
+				in->cd("SRC/1D_B23");
+				TH1D *hRAW_S_B23 = (TH1D*)gDirectory->Get(histName);
+				if (hRAW_S_B23->GetEntries()<100)
 					continue;
 
 				//
@@ -361,16 +437,20 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				fit(hRAW_S_B);
 				out->cd("Histos/1D_B");
 				hRAW_S_B->Write();
+				fit(hRAW_S_B23);
+				out->cd("Histos/1D_B23");
+				hRAW_S_B23->Write();
 
 				TF1 *fit_S = hRAW_S->GetFunction("myGaus");
 				TF1 *fit_S_F = hRAW_S_F->GetFunction("myGaus");
 				TF1 *fit_S_B = hRAW_S_B->GetFunction("myGaus");
+				TF1 *fit_S_B23 = hRAW_S_B23->GetFunction("myGaus");
 				TF1 *fit_B = hRAW_B->GetFunction("myGaus");
 				Double_t qie_mean_S = fit_S->GetParameter(1);
 				Double_t qie_mean_B = fit_B->GetParameter(1);
 				Double_t qie_sigma_S = fit_S->GetParameter(2);
 				Double_t qie_sigma_B = fit_B->GetParameter(2);
-				
+
 				//
 				//	Fill the 2D maps of PED Mean/Sigmas
 				//
@@ -384,6 +464,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 
 				Double_t qie_mean_S_F = fit_S_F->GetParameter(1);
 				Double_t qie_mean_S_B = fit_S_B->GetParameter(1);
+				Double_t qie_mean_S_B23 = fit_S_B23->GetParameter(1);
 				Double_t totQSum_S = 0;
 				Double_t totQSum_B = 0;
 				Double_t totNSum_S = 0;
@@ -392,7 +473,22 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				Double_t totNSum_S_F = 0;
 				Double_t totQSum_S_B = 0;
 				Double_t totNSum_S_B = 0;
-				for (int iBin=0; iBin<NUMBINS; iBin++)
+				Double_t totQSum_S_B23 = 0;
+				Double_t totNSum_S_B23 = 0;
+				Double_t totQSum_S_NoOF = 0;
+				Double_t totNSum_S_NoOF = 0;
+				Double_t totQSum_B_NoOF = 0;
+				Double_t totNSum_B_NoOF = 0;
+
+				if (ooo==true)
+				{
+					for (int iBin=0; iBin<NUMBINS; iBin++)
+						outTxt_4345 << hRAW_S->GetBinCenter(iBin+1) << "  ";
+					outTxt_4345 << endl;
+					ooo = false;
+				}
+
+				for (int iBin=0; iBin<(NUMBINS-1); iBin++)
 				{
 					totNSum_S += hRAW_S->GetBinContent(iBin+1)*
 						hRAW_S->GetBinWidth(iBin+1);
@@ -402,6 +498,8 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 						hRAW_S_F->GetBinWidth(iBin+1);
 					totNSum_S_B += hRAW_S_B->GetBinContent(iBin+1)*
 						hRAW_S_B->GetBinWidth(iBin+1);
+					totNSum_S_B23 += hRAW_S_B23->GetBinContent(iBin+1)*
+						hRAW_S_B23->GetBinWidth(iBin+1);
 					totQSum_S+= hRAW_S->GetBinCenter(iBin+1)*
 						hRAW_S->GetBinContent(iBin+1)*
 						hRAW_S->GetBinWidth(iBin+1);
@@ -414,17 +512,42 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					totQSum_S_B+=hRAW_S_B->GetBinCenter(iBin+1)*
 						hRAW_S_B->GetBinContent(iBin+1)*
 						hRAW_S_B->GetBinWidth(iBin+1);
+					totQSum_S_B23 += hRAW_S_B23->GetBinCenter(iBin+1)*
+						hRAW_S_B23->GetBinContent(iBin+1)*
+						hRAW_S_B23->GetBinWidth(iBin+1);
+
+						totNSum_S_NoOF += hRAW_S->GetBinContent(iBin+1)*
+							hRAW_S->GetBinWidth(iBin+1);
+						totNSum_B_NoOF += hRAW_B->GetBinContent(iBin+1)*
+							hRAW_B->GetBinWidth(iBin+1);
+						totQSum_S_NoOF += hRAW_S->GetBinContent(iBin+1)*
+							hRAW_S->GetBinWidth(iBin+1)*
+							hRAW_S->GetBinCenter(iBin+1);
+						totQSum_B_NoOF += hRAW_B->GetBinContent(iBin+1)*
+							hRAW_B->GetBinWidth(iBin+1)*
+							hRAW_B->GetBinCenter(iBin+1);
 				}
 
 				Double_t speQ_S = totQSum_S/totNSum_S - qie_mean_S;
 				Double_t speQ_B = totQSum_B/totNSum_B - qie_mean_B;
+				Double_t signal_S_NoOF = totQSum_S_NoOF/totNSum_S_NoOF - qie_mean_S;
+				Double_t signal_B_NoOF = totQSum_B_NoOF/totNSum_B_NoOF - qie_mean_B;
+				Double_t signal_NoOF = signal_S_NoOF - signal_B_NoOF;
+				Double_t signal_NoOF_wGCF = signal_NoOF/gcf;
 				Double_t speQ_UNCORR = speQ_S - speQ_B;
 				Double_t speQ_CORR = speQ_UNCORR/gcf;
+//				Double_t speQ_UNCORR = signal_NoOF;
+//				Double_t speQ_CORR = signal_NoOF_wGCF;
+
 				Double_t speQ_S_F = totQSum_S_F/totNSum_S_F - qie_mean_S_F;
 				Double_t speQ_S_B = totQSum_S_B/totNSum_S_B - qie_mean_S_B;
+				Double_t signal_S_B23 = totQSum_S_B23/totNSum_S_B23 - 
+					qie_mean_S_B23;
+				Double_t signal_S_B23_mBG = signal_S_B23 - speQ_B;
 				Double_t speQ_S_F_mBG = speQ_S_F - speQ_B;
 				Double_t speQ_S_B_mBG = speQ_S_B - speQ_B;
 				Double_t ratioSFSB = speQ_S_F_mBG/speQ_S_B_mBG;
+				Double_t ratio_S_B23toS = signal_S_B23_mBG/speQ_UNCORR;
 
 				//
 				//	Fill the Histos, Profiles, Graphs...
@@ -449,23 +572,42 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 
 				hSPE_UNCORR->Fill(speQ_UNCORR);
 				hSPE_CORR->Fill(speQ_CORR);
+				if ((2*iphi+1)==43 || (2*iphi+1)==45)
+				{
+					hSignal_4345[idepth]->Fill(speQ_CORR);
+					hSignal_UNCORR_4345[idepth]->Fill(speQ_UNCORR);
+
+					Double_t S1G1_4345 = signal_NoOF_wGCF/
+						gainMap[iphi][ieta][idepth].gain_OV1;
+					Double_t signal_OV2_4345 = S1G1_4345*
+						gainMap[iphi][ieta][idepth].gain_OV2;
+					Double_t adc2GeV_OV1_4345 = GEVPER25NS[idepth]/
+						signal_NoOF_wGCF;
+					Double_t adc2GeV_OV1_4345_CORR = adc2GeV_OV1_4345*
+						SOURCEACTIVITYCORRECTION[hfSide];
+					Double_t adc2GeV_OV2_4345 = GEVPER25NS[idepth]/signal_OV2_4345;
+					Double_t adc2GeV_OV2_4345_CORR = adc2GeV_OV2_4345*
+						SOURCEACTIVITYCORRECTION[hfSide];
+
+					outTxt_4345 << 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
+						<< "  " << gcf << "  " << signal_NoOF_wGCF 
+						<< "  " << adc2GeV_OV1_4345_CORR
+						<< "  " << adc2GeV_OV2_4345_CORR
+						<< "  " 
+						<< gainMap[iphi][ieta][idepth].gain_OV1
+						<< "  "
+						<< gainMap[iphi][ieta][idepth].gain_OV2
+						<< endl;
+//						<< "  " << signal_NoOF << "  " 
+//						<< signal_S_NoOF << "  " << signal_B_NoOF << "  "
+//						<< qie_mean_S << "  " << qie_mean_B << endl;
+				}
 				hSFoverSB[idepth]->Fill(ratioSFSB);
 				hSFoverSB_D12->Fill(ratioSFSB);
-
-				if (numTS==1)
-					outTxt << 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
-						<< "  " << speQ_CORR << "  " 
-						<< gainMap[iphi][ieta][idepth].gain_OV1 << "  "
-						<< qie_mean_S << "  " 
-						<< gainMap[iphi][ieta][idepth].gain_OV2
-						<< endl;
-				else if (numTS==2)
-					outTxt << 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
-						<< "  " << speQ_CORR << "  " 
-						<< gainMap[iphi][ieta][idepth].gain_OV1P100 << "  "
-						<< qie_mean_S << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV2
-						<< endl;
+				hSB23toS[idepth]->Fill(ratio_S_B23toS);
+				hSB23toS_D12->Fill(ratio_S_B23toS);
+				pSB23toS[idepth]->Fill(ieta+29, ratio_S_B23toS);
+				pSB23toS_D12->Fill(ieta+29, ratio_S_B23toS);
 
 				//
 				//	Plot SPE vs Gain
@@ -489,7 +631,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					S1G1 = signal/gain_OV1;
 					signal_OV2 = signal/gain_OV1*gain_OV2;
 					adc2GeV = GEVPER25NS[idepth]/signal_OV2;
-					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
+					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION[hfSide];
 					gainRatio = gain_OV2/gain_OV1;
 				}
 				else if (numTS == 2)
@@ -497,7 +639,7 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 					S1G1 = signal/gain_OV1P100/2.;
 					signal_OV2 = S1G1*gain_OV2;
 					adc2GeV = GEVPER25NS[idepth]/signal_OV2;
-					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION;
+					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION[hfSide];
 					gainRatio = gain_OV2/gain_OV1P100;
 				}
 				hADC2GeV_Map_OV2[idepth]->Fill(2*iphi+1, ieta+29, adc2GeV_CORR);
@@ -505,6 +647,29 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 				hADC2GeV_OV2[idepth]->Fill(adc2GeV);
 				hADC2GeV_OV2_CORR[idepth]->Fill(adc2GeV_CORR);
 				hGainsRatio->Fill(gainRatio);
+
+				if (numTS==1)
+					outTxt << iTubeType << "  " << gcf << "  "
+						<< 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
+						<< "  " << speQ_CORR << "  " << signal_OV2 << "  "
+						<< ratio_S_B23toS << "  "
+						<< adc2GeV_CORR << "  "
+						<< gainMap[iphi][ieta][idepth].gain_OV1 << "  "
+						<< qie_mean_S << "  " 
+						<< gainMap[iphi][ieta][idepth].gain_OV2 << "  "
+						<< gainMap[iphi][ieta][idepth].gain_OV1P100
+						<< endl;
+				else if (numTS==2)
+					outTxt << iTubeType << "  " << gcf << "  "
+						<< 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
+						<< "  " << speQ_CORR << "  " << signal_OV2 << "  "
+						<< ratio_S_B23toS << "  "
+						<< adc2GeV_CORR << "  "
+						<< gainMap[iphi][ieta][idepth].gain_OV1 << "  "
+						<< qie_mean_S << "  "
+						<< gainMap[iphi][ieta][idepth].gain_OV2 << "  "
+						<< gainMap[iphi][ieta][idepth].gain_OV1P100
+						<< endl;
 
 				counter_Gain++;
 			}
@@ -559,12 +724,18 @@ void analyze(string inFileName, string outFileName, string outTxtFileName,
 		pSFoverSB[i-1]->GetYaxis()->SetTitleOffset(1.2);
 		pSFoverSB[i-1]->GetYaxis()->SetRangeUser(0.8, 1.2);
 
+		pSB23toS[i-1]->GetXaxis()->SetTitle("ieta");
+		pSB23toS[i-1]->GetYaxis()->SetTitle("SB2_3/SAll");
+		pSB23toS[i-1]->GetYaxis()->SetTitleOffset(1.2);
+		pSB23toS[i-1]->GetYaxis()->SetRangeUser(0.8, 1.2);
+
 		pSFSBvsPHI_Avg[i-1]->GetXaxis()->SetTitle("iphi");
 		pSFSBvsPHI_Avg[i-1]->GetYaxis()->SetTitle("SF/SB");
 		pSFSBvsPHI_Avg[i-1]->GetYaxis()->SetTitleOffset(1.2);
 		pSFSBvsPHI_Avg[i-1]->GetYaxis()->SetRangeUser(0.8, 1.2);
 
 		hSFoverSB[i-1]->GetXaxis()->SetTitle("SF/SB");
+		hSB23toS[i-1]->GetXaxis()->SetTitle("SB2_3/SAll");
 	}
 	pSFoverSB_D12->GetXaxis()->SetTitle("ieta");
 	pSFoverSB_D12->GetYaxis()->SetTitle("SF/SB");
@@ -882,7 +1053,6 @@ int initSwaps()
 	coord.ieta = 0;
 	coord.idepth = 1;
 	swappedChs[29] = coord;
-
 	coord.iphi = 26;
 	coord.ieta = 1;
 	coord.idepth = 0;
@@ -937,7 +1107,7 @@ double getSwapRatio(TH1D *h, int iTS)
 //
 //	Reads GCF and Tubes Map
 //
-int readTubesMap(string fileNameMap, TubesMap &map, string gcfFileName, 
+int readTubesMap(int hfSide, string fileNameMap, TubesMap &map, string gcfFileName, 
 		int verb)
 {
 	cout << "### Reading in Tubes " << endl;
@@ -973,17 +1143,29 @@ int readTubesMap(string fileNameMap, TubesMap &map, string gcfFileName,
 	counter = 0;
 	while (mapFile >> tubeName)
 	{
-		mapFile >> wedgeName >> iwaste >> swaste
-			>> eta >> eta >> phi >> iwaste >> iwaste 
-			>> tubeStart >> tubeEnd >> groove;
+		if (hfSide==0)
+			mapFile >> wedgeName >> iwaste >> swaste
+				>> eta >> eta >> phi >> iwaste >> iwaste 
+				>> tubeStart >> tubeEnd >> groove;
+		else if (hfSide==1)
+			mapFile >> wedgeName
+				>> eta >> eta >> phi
+				>> tubeStart >> tubeEnd >> groove;
 
 		int iphi = (phi-1)/2;
 		int ieta = abs(eta) - 29;
 		int checkRBX, checkPhi, checkEta, checkTubeNum;
 		char tubeType;
-		sscanf(tubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
-				&checkRBX, &checkEta, &checkPhi, &checkTubeNum,
-				&tubeType);
+
+		if (hfSide==0)
+			sscanf(tubeName.c_str(), "HFP%d_ETA%d_PHI%d_T%d%c%*[^]",
+					&checkRBX, &checkEta, &checkPhi, &checkTubeNum,
+					&tubeType);
+		else if (hfSide==1)
+			sscanf(tubeName.c_str(), "HFM%d_ETA%d_PHI%d_T%d%c%*[^]",
+					&checkRBX, &checkEta, &checkPhi, &checkTubeNum,
+					&tubeType);
+
 		int iTubeType = 0;
 		if (tubeType=='A' || tubeType=='_')
 			iTubeType = 0;
@@ -1004,3 +1186,24 @@ int readTubesMap(string fileNameMap, TubesMap &map, string gcfFileName,
 
 	return 0;
 }
+
+int main(int arc, char **argv)
+{
+	int hfSide = atoi(argv[1]);
+	string inFileName = argv[2];
+	string outFileName = argv[3];
+	string outTxtFileName = argv[4];
+	string mapFileName = argv[5];
+	string gcfFile = argv[6];
+	string eMapFileName = argv[7];
+	string gainMapFileName = argv[8];
+	string swapsFileName = argv[9];
+	int numTS = atoi(argv[10]);
+
+	analyze(hfSide, inFileName, outFileName, outTxtFileName,
+			mapFileName, gcfFile, eMapFileName, gainMapFileName,
+			swapsFileName, numTS);
+
+	return 0;
+}
+

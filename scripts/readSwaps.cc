@@ -70,6 +70,21 @@ int isChSwap(TSwaps &swaps, int iphi, int ieta, int depth)
 	return iswap;
 }
 
+int isSrcError(TSwaps &swaps, int iphi, int ieta, int iTS)
+{
+	int iswap = 0;
+	for (int i=0; i<swaps.numSrcErrors; i++)
+		if (iphi==swaps.srcErrors[i].iphi && ieta==swaps.srcErrors[i].ieta)
+		{
+			if (iTS==1)
+				iswap = swaps.srcErrors[i].q1TS;
+			else if (iTS==2)
+				iswap = swaps.srcErrors[i].q2TS;
+		}
+
+	return iswap;
+}
+
 void readSwaps(string inSwapsFileName, TSwaps &swaps, int verbosity=0)
 {
 	ifstream in(inSwapsFileName.c_str());

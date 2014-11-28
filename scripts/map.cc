@@ -77,7 +77,7 @@ TRbxBBPmt eta2rbx(TEtaPhiDepth etaPhiDepth, TEMap &map)
 //
 //	Get Gain Map
 //
-void getGainMap(string gainMapFileName, TGainMap gainMap, TEMap eMap)
+void getGainMap(int hfSide, string gainMapFileName, TGainMap gainMap, TEMap eMap)
 {
 	cout << "### Reading Gain Map..." << endl;
 
@@ -85,19 +85,25 @@ void getGainMap(string gainMapFileName, TGainMap gainMap, TEMap eMap)
 	string shf, sbb, spmt;
 	Double_t gain_OV1, gain_OV2, gain_OV1P100;
 	int rbx, bb, pmt;
-	char hfSide;
+	char chfSide;
+	int ihfSide;
 	while (in >> shf)
 	{
 		in >> sbb >> spmt >> gain_OV1 >> gain_OV2 >> gain_OV1P100;
-		sscanf(shf.c_str(), "HF%c%d", &hfSide, &rbx);
+		sscanf(shf.c_str(), "HF%c%d", &chfSide, &rbx);
 
 //		cout << shf << " " << sbb << " " << spmt << " " << endl;
 
 		//
 		//	MOdify for HFP
 		//
-		if (hfSide=='M')
+		if (chfSide=='M')
+			ihfSide = 1;
+		else if (chfSide == 'P')
+			ihfSide = 0;
+		if (hfSide!=ihfSide)
 			continue;
+			
 		sscanf(sbb.c_str(), "BB%d", &bb);
 		sscanf(spmt.c_str(), "PMT%d", &pmt);
 
@@ -139,7 +145,7 @@ void getGainMap(string gainMapFileName, TGainMap gainMap, TEMap eMap)
 //
 //	Get the map
 //
-void getMap(string mapFileName, TEMap &map)
+void getMap(int hfSide, string mapFileName, TEMap &map)
 {
 	cout << "### Reading Electronics Map..." << endl;
 
@@ -148,7 +154,8 @@ void getMap(string mapFileName, TEMap &map)
 	while(in >> iphi)
 	{
 		in >> ieta >> depth >> rbx >> bb >> pmt;
-//		rbx -= 36;
+		if (hfSide==1)
+			rbx -= 36;
 		int iiphi = (iphi-1)/2;
 		int iieta = abs(ieta)-29;
 		int iidepth = depth-1;

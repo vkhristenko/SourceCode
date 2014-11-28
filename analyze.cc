@@ -571,10 +571,10 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 				//	Also, make sure that our source is inside the detector and 
 				//	not in the fibers outside the detector
 				//
-				if (map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart >= 
-						raw.reelPos || 
-						map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd <=
-						raw.reelPos)
+				if ((map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart+300) 
+						>= raw.reelPos || 
+						(map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd-300) 
+						<= raw.reelPos)
 					continue;
 
 				addHisto(iCh, raw, 
