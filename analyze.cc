@@ -300,10 +300,11 @@ int main(int argc, char** argv)
 				}
 			}
 
-
 	out.rootFile->cd();
 	out.rootFile->Write();
 	out.rootFile->Close();
+
+	cout << "### Finishing" << endl;
 	return 0;
 }
 
@@ -368,7 +369,8 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 			cout << pointD1 << "  " << pointD2 << endl;
 			pointD1 = 0;
 			pointD2 = 0;
-			cout << "### Current Source Tube: " << someName << endl;
+			cout << "### Current Source Tube: " << someName 
+				<< endl;
 		}
 
 		int srciEta, srciPhi, srciTubeType, srcWedge, srcTubeNumber;
@@ -395,19 +397,23 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 		//	or if srciEta==39, then use 38 or 40, depending on the avail of 40.
 		//
 		int useiTubeType=0;
-		if (isSrcError(service.swaps, srciPhi, srciEta, service.iTS)==1
-				&& srciEta==29)
+		if (isSrcError(service.swaps, srciPhi, srciEta, 0, 
+					service.iTS)==1	&& srciEta==29)
 			useiTubeType = 1;
 
 		//
 		//	Check if current tube is in the list of Swapped
 		//	If it is, get the srciPhi, srciEta to be equal to new coords
 		//
-		int iswap = isTubeSwap(service.swaps, srciPhi, srciEta);
+		int iswap = isTubeSwap(service.swaps, srciPhi, srciEta, srciTubeType);
 		if (iswap>=0)
 		{
 			srciPhi = service.swaps.tubeSwaps[iswap].f_iphi;
 			srciEta = service.swaps.tubeSwaps[iswap].f_ieta;
+			srciTubeType = service.swaps.tubeSwaps[iswap].f_itube;
+			cout << "### Tube Swap. Correct Tube Coordinates are "
+				<< srciPhi << "  " << srciEta << "  " << srciTubeType
+				<< endl;
 		}
 		int srciiEta = abs(srciEta)-29;
 		int srciiPhi = (srciPhi-1)/2;
@@ -421,7 +427,12 @@ void analyze(int &globalEvents, RawInput& raw, HistoOutput& out,
 				<< "  end="
 				<< map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd
 				<< endl;
-		
+		if (pointD1==1)
+			cout << map.tubes[srciiPhi][srciiEta][srciTubeType].tubeStart
+				<< "  "
+				<< map.tubes[srciiPhi][srciiEta][srciTubeType].tubeEnd
+				<< endl;
+
 
 		//
 		//	Iterate through all the channels

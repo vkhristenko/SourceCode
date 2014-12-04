@@ -97,6 +97,43 @@ struct TubesMap
 	SourceTubeInfo tubes[NUMPHIS][NUMETAS][NUMTUBETYPES];
 };
 
+struct TOut
+{
+	TFile *rootFile;
+	ofstream txtFile;
+
+	//
+	//	The last dimension differentiates between w/ OF and w/o OF
+	//	[0] -> w/ OF
+	//	[1] -> w/o OF
+	//
+	TProfile *pSignalvsETA_UNCORR[NUMTUBETYPES][NUMDEPTHS][2];
+	TProfile *pSignalvsETA_CORR[NUMTUBETYPES][NUMDEPTHS][2];
+	TProfile *pSFSBvsETA[NUMTUBETYPES][NUMDEPTHS][2];
+	TProfile *pSB23toSvsETA[NUMTUBETYPES][NUMDEPTHS][2];
+
+	TH2D *hPedMean_S[NUMTUBETYPES][NUMDEPTHS];
+	TH2D *hPedMean_B[NUMTUBETYPES][NUMDEPTHS];
+	TH2D *hPedSigma_S[NUMTUBETYPES][NUMDEPTHS];
+	TH2D *hPedSigma_B[NUMTUBETYPES][NUMDEPTHS];
+	TH2D *hSwapRatio[NUMTUBETYPES][NUMDEPTHS];
+//	TH2D *hADC2GeV_OV2[NUMTUBETYPES][NUMDEPTHS][2];
+
+	TH1D *hSignal_UNCORR[NUMTUBETYPES][NUMDEPTHS][2];
+	TH1D *hSignal_CORR[NUMTUBETYPES][NUMDEPTHS][2];
+	TH1D *hSignal_OV2[NUMTUBETYPES][NUMDEPTHS][2];
+	TH1D *hADC2GeV_OV2_UNCORR[NUMTUBETYPES][NUMDEPTHS][2];
+	TH1D *hADC2GeV_OV2_CORR[NUMTUBETYPES][NUMDEPTHS][2];
+	TH1D *hSFSB[NUMTUBETYPES][NUMDEPTHS][2];
+	TH1D *hSB23toS[NUMTUBETYPES][NUMDEPTHS][2];
+	
+	TH1D *hGainsRatio;
+	TH1D *hRatio_NoOF2wOF;
+
+//	TGraph *gSignalvsGain;
+
+//	TProfile *
+};
 
 
 void analyze_AvgQ(int hfSide, string inFileName, string outFileName, 
@@ -110,6 +147,7 @@ void analyze_AvgQ(int hfSide, string inFileName, string outFileName,
 }
 
 double getSwapRatio(TH1D *h, int iTS);
+int initOut(TOut&, int iTS, string rootFileName, string txtFileName);
 
 void analyze(int hfSide, string inFileName, string outFileName, string outTxtFileName, 
 		string mapFileName, string gcfFile, 
@@ -122,7 +160,7 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 	TFile *in = new TFile(inFileName.c_str());
 
 	//
-	//	Get Electronics and Gain Maps
+	//	Get Electronics and Gain Maps + Define Output
 	//
 	TEMap eMap;
 	getMap(hfSide, eMapFileName, eMap);
@@ -130,185 +168,18 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 	getGainMap(hfSide, gainMapFileName, gainMap, eMap);	
 	TSwaps swaps;
 	readSwaps(swapsFileName, swaps, 0);
+	TOut vOut;
+	initOut(vOut, numTS, outFileName, outTxtFileName);
 
-/*	for (int iphi=0; iphi<NUMPHIS; iphi++)
-		for (int ieta=0; ieta<NUMETAS; ieta++)
-			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
-			{
-				cout << iphi << "  " << ieta << "  " << idepth 
-					<< "  " << gainMap[iphi][ieta][idepth].gain_OV1
-					<< "  " << gainMap[iphi][ieta][idepth].gain_OV2 << endl;
-			}
-*/			
-
-	//
-	//	Create the Output File, initialzie whatever
-	//
-	ofstream outTxt(outTxtFileName.c_str());
-	ofstream outTxt_4345("out_4345.txt");
-	bool ooo = true;
-	TFile *out = new TFile(outFileName.c_str(), "recreate");
-	out->mkdir("Profiles");
-	out->mkdir("Histos");
-	out->mkdir("Graphs");
-
-	out->cd("Profiles");
-	TProfile *pSPEvsETA_UNCORR[NUMDEPTHS];
-	TProfile *pSPEvsETA_CORR[NUMDEPTHS];
-	TProfile *pSPEvsPHI_Avg[NUMDEPTHS];
-	TProfile *pSPEvsPHI[NUMETAS][NUMDEPTHS];
-	TProfile *pSFSBvsPHI[NUMETAS][NUMDEPTHS];
-	TProfile *pSFoverSB[NUMDEPTHS];
-	TProfile *pSB23toS[NUMDEPTHS];
-	TProfile *pSB23toS_D12;
-	TProfile *pSFoverSB_D12;
-	TProfile *pSFSBvsPHI_Avg[NUMDEPTHS];
-	pSPEvsETA_UNCORR[0] = new TProfile("SignalvsETA_D1_UNCORR", 
-			"SignalvsETA_D1_UNCORR",
-			13, 29, 42);
-	pSPEvsETA_UNCORR[1] = new TProfile("SignalvsETA_D2_UNCORR", 
-			"SignalvsETA_D2_UNCORR",
-			13, 29, 42);
-	pSPEvsETA_CORR[0] = new TProfile("SignalvsETA_D1_CORR", 
-			"SignalvsETA_D1_CORR", 
-			13, 29, 42);
-	pSPEvsETA_CORR[1] = new TProfile("SignalvsETA_D2_CORR", 
-			"SignalvsETA_D2_CORR", 
-			13, 29, 42);
-	pSPEvsPHI_Avg[0] = new TProfile("SignalvsPHI_D1_Avg", "SignalvsPHI_D1_Avg",
-			72, 0, 72);
-	pSPEvsPHI_Avg[1] = new TProfile("SignalvsPHI_D2_Avg", "SignalvsPHI_D2_Avg",
-			72, 0, 72);
-	pSFoverSB[0] = new TProfile("SFoverSB_D1", "SFoverSB_D1",
-			13, 29, 42);
-	pSFoverSB[1] = new TProfile("SFoverSB_D2", "SFoverSB_D2",
-			13, 29, 42);
-	pSFoverSB_D12 = new TProfile("SFoverSB_D12", "SFoverSB_D12", 
-			13, 29, 42);
-	pSFSBvsPHI_Avg[0] = new TProfile("SFoverSBvsPHI_D1_Avg", "SFoverSBvsPHI_D1_Avg",
-			72, 0, 72);
-	pSFSBvsPHI_Avg[1] = new TProfile("SFoverSBvsPHI_D2_Avg", "SFoverSBvsPHI_D2_Avg",
-			72, 0, 72);
-	pSB23toS[0] = new TProfile("SB23toS_D1", "SB23toS_D1", 13, 29, 42);
-	pSB23toS[1] = new TProfile("SB23toS_D2", "SB23toS_D2", 13, 29, 42);
-	pSB23toS_D12 = new TProfile("SB23toS_D12", "SB23toS_D12", 13, 29, 42);
-
-	gDirectory->mkdir("SPEvsPHI");
-	gDirectory->mkdir("SFSBvsPHI");
-	char profName[200];
-	for (int ieta=0; ieta<NUMETAS; ieta++)
-	{
-		for (int idepth=0; idepth<NUMDEPTHS; idepth++)
-		{
-			out->cd("Profiles/SPEvsPHI");
-			sprintf(profName, "SignalvsPHI_ETA%d_D%d", ieta+29, idepth+1);
-			pSPEvsPHI[ieta][idepth] = new TProfile(profName, profName,
-					72, 0, 72);
-
-			out->cd("Profiles/SFSBvsPHI");
-			sprintf(profName, "SFoverSBvsPHI_ETA%d_D%d", ieta+29, idepth+1);
-			pSFSBvsPHI[ieta][idepth] = new TProfile(profName, profName,
-					72, 0, 72);
-		}
-	}
-
-	out->cd("Histos");
-	gDirectory->mkdir("2D");
-	gDirectory->mkdir("1D");
-	gDirectory->mkdir("1D_F");
-	gDirectory->mkdir("1D_B");
-	gDirectory->mkdir("1D_B23");
-	gDirectory->cd("1D");
-	gDirectory->mkdir("SIG");
-	gDirectory->mkdir("BACK");
-	out->cd("Histos/2D");
-	TH2D *hPedMean_S[NUMDEPTHS];
-	TH2D *hPedMean_B[NUMDEPTHS];
-	TH2D *hPedSigma_S[NUMDEPTHS];
-	TH2D *hPedSigma_B[NUMDEPTHS];
-	TH2D *hSwapRatio[NUMDEPTHS];
-	TH2D *hADC2GeV_Map_OV2[NUMDEPTHS];
+	bool ooo = true;	
 	char someName[200];
-	for (int i=0; i<2; i++)
-	{
-		sprintf(someName, "PedMean_S_D%d", i+1);
-		hPedMean_S[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
-		
-		sprintf(someName, "PedMean_B_D%d", i+1);
-		hPedMean_B[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
-
-		sprintf(someName, "PedSigma_S_D%d", i+1);
-		hPedSigma_S[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
-
-		sprintf(someName, "PedSigma_B_D%d", i+1);
-		hPedSigma_B[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
-
-		sprintf(someName, "SwapRatio_D%d", i+1);
-		hSwapRatio[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
-
-		sprintf(someName, "ADC2GeV_Map_OV2_D%d", i+1);
-		hADC2GeV_Map_OV2[i] = new TH2D(someName, someName, 72, 0, 72, 13, 29, 42);
-	}
-	out->cd("Histos");
-	TH1D *hSPE_UNCORR;
-	TH1D *hSPE_CORR;
-	TH1D *hSignal_4345[NUMDEPTHS];
-	TH1D *hSignal_UNCORR_4345[NUMDEPTHS];
-	hSignal_4345[0] = new TH1D("Signal_4345_D1", "Signal 43&45 D1", 
-			10000, 0, 0.02);
-	hSignal_4345[1] = new TH1D("Signal_4345_D2", "Signal 43&45 D2", 
-			10000, 0, 0.02);
-	hSignal_UNCORR_4345[0] = new TH1D("Signal_UNCORR_4345_D1", 
-			"Signal UNCORR 43&45 D1", 
-			10000, 0, 0.02);
-	hSignal_UNCORR_4345[1] = new TH1D("Signal_UNCORR_4345_D2", 
-			"Signal UNCORR 43&45 D2", 
-			10000, 0, 0.02);
-	TH1D *hSignal_OV2[NUMDEPTHS];
-	hSignal_OV2[0] = new TH1D("Signal_OV2_D1", "Signal OV2_D1", 10000, 0, 0.02);
-	hSignal_OV2[1] = new TH1D("Signal_OV2_D2", "Signal OV2_D2", 10000, 0, 0.02);
-	TH1D *hADC2GeV_OV2[NUMDEPTHS];
-	hADC2GeV_OV2[0] = new TH1D("ADC2GeV_OV2_D1", "ADC2GeV OV2_D1", 10000, 0, 2);
-	hADC2GeV_OV2[1] = new TH1D("ADC2GeV_OV2_D2", "ADC2GeV OV2_D2", 10000, 0, 2);
-	TH1D *hADC2GeV_OV2_CORR[NUMDEPTHS];
-	hADC2GeV_OV2_CORR[0] = new TH1D("ADC2GeV_OV2_CORR_D1", "ADC2GeV OV2 CORR_D1",
-			10000, 0, 2);
-	hADC2GeV_OV2_CORR[1] = new TH1D("ADC2GeV_OV2_CORR_D1_D2", 
-			"ADC2GeV OV2 CORR_D2", 10000, 0, 2);
-	TH1D *hGainsRatio = new TH1D("GainsRatio", "Gains Ratio", 10000, 0, 1);
-	if(numTS==1) 
-	{
-		hSPE_UNCORR = new TH1D("Signals_UNCORR", "Signals_UNCORR",100, 0, 0.02);
-		hSPE_CORR = new TH1D("Signals_CORR", "Signals_CORR", 100, 0, 0.02);
-	}
-	else
-	{
-		hSPE_UNCORR = new TH1D("Signals_UNCORR", "Signals_UNCORR", 1000, 0, 0.2);
-		hSPE_CORR = new TH1D("Signals_CORR", "Signals_CORR", 1000, 0, 0.2);
-	}
-	TH1D *hSFoverSB[NUMDEPTHS];
-	TH1D *hSB23toS[NUMDEPTHS];
-	hSFoverSB[0] = new TH1D("SFoverSB_D1", "SFoverSB_D1", 100, 0, 2);
-	hSFoverSB[1] = new TH1D("SFoverSB_D2", "SFoverSB_D2", 100, 0, 2);
-	hSB23toS[0] = new TH1D("SB23toS_D1", "SB23toS_D1", 100, 0, 2);
-	hSB23toS[1] = new TH1D("SB23toS_D2", "SB23toS_D2", 100, 0, 2);
-	TH1D *hSFoverSB_D12 = new TH1D("SFoverSB_D12", "SFoverSB_D12",
-			100, 0, 2);
-	TH1D *hSB23toS_D12 = new TH1D("SB23toS_D12", "SB23toS_D12", 100, 0, 2);
-	TGraph *gSPEvsGain = new TGraph();
-	gSPEvsGain->SetTitle("SignalvsGain");
-	gSPEvsGain->SetName("SignalvsGain");
+	char profName[200];
 
 	if (numTS==1)
 		cut_toUse = PEDCUT_1TS;
 	else
 		cut_toUse = PEDCUT_2TS;
 	cout << "CUT=" << cut_toUse << endl;;
-
-	//
-	//	Init Swaps
-	//
-	initSwaps();
 
 	//
 	//	Read in GCF and Tubes Map
@@ -326,7 +197,7 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 	bool checkSwap = false;
 
 	//	Sorry for no indentation here 
-	for (int iTubeType=0; iTubeType<NUMTUBETYPES; iTubeType++)
+	for (int itube=0; itube<NUMTUBETYPES; itube++)
 	for (int iphi=0; iphi<NUMPHIS; iphi++)
 		for (int ieta=0; ieta<NUMETAS; ieta++)
 			for (int idepth=0; idepth<NUMDEPTHS; idepth++)
@@ -335,23 +206,10 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				cout << "### Processing: " << 2*iphi+1 << "  " << ieta+29
 					<< idepth+1 << endl;
 
-/*				//
-				//	Check if this channel is among swaps...
-				//
-				for (int iswap=0; iswap<NUMSWAPS; iswap++)
-					if (swappedChs[iswap].iphi==(2*iphi+1) && 
-							swappedChs[iswap].ieta==(ieta+29) &&
-							swappedChs[iswap].idepth==idepth)
-						checkSwap = true;
-				if (checkSwap)
-				{
-					checkSkips++;
-					continue;
-				}
-*/
 				if (swaps.numSrcErrors>0)
 				{
-					int iswap = isSrcError(swaps, 2*iphi+1, ieta+29, numTS);
+					int iswap = isSrcError(swaps, 2*iphi+1, ieta+29, itube, 
+							numTS);
 					if (iswap==1)
 						continue;
 				}
@@ -360,7 +218,7 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//	Get a Sig histo
 				//
 				sprintf(histName, "1D_F3B3_wSrc_%d_PHI%d_ETA%d_D%d",
-						iTubeType, 2*iphi+1, ieta+29, idepth+1);
+						itube, 2*iphi+1, ieta+29, idepth+1);
 				in->cd("SRC/1D_F3B3");
 				TH1D *hRAW_S = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S->GetEntries()<100)
@@ -370,7 +228,7 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//	Get a Sig_F histo
 				//
 				sprintf(histName, "1D_F_wSrc_%d_PHI%d_ETA%d_D%d",
-						iTubeType, 2*iphi+1, ieta+29, idepth+1);
+						itube, 2*iphi+1, ieta+29, idepth+1);
 				in->cd("SRC/1D_F");
 				TH1D *hRAW_S_F = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S_F->GetEntries()<100)
@@ -380,7 +238,7 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//	Get a Sig_B histo
 				//
 				sprintf(histName, "1D_B_wSrc_%d_PHI%d_ETA%d_D%d",
-						iTubeType, 2*iphi+1, ieta+29, idepth+1);
+						itube, 2*iphi+1, ieta+29, idepth+1);
 				in->cd("SRC/1D_B");
 				TH1D *hRAW_S_B = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S_B->GetEntries()<100)
@@ -400,7 +258,7 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//	Get a Sig_B23 histo
 				//
 				sprintf(histName, "1D_B23_wSrc_%d_PHI%d_ETA%d_D%d",
-						iTubeType, 2*iphi+1, ieta+29, idepth+1);
+						itube, 2*iphi+1, ieta+29, idepth+1);
 				in->cd("SRC/1D_B23");
 				TH1D *hRAW_S_B23 = (TH1D*)gDirectory->Get(histName);
 				if (hRAW_S_B23->GetEntries()<100)
@@ -410,14 +268,14 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//	Get the GCF
 				//
 				double gcf = 1;
-				if (idepth==0 &&map.tubes[iphi][ieta][iTubeType].groove=='H'
-						|| idepth==1 && map.tubes[iphi][ieta][iTubeType].groove
+				if (idepth==0 &&map.tubes[iphi][ieta][itube].groove=='H'
+						|| idepth==1 && map.tubes[iphi][ieta][itube].groove
 						=='E')
-					gcf = map.tubes[iphi][ieta][iTubeType].em;
-				else if (idepth==0 && map.tubes[iphi][ieta][iTubeType].groove
+					gcf = map.tubes[iphi][ieta][itube].em;
+				else if (idepth==0 && map.tubes[iphi][ieta][itube].groove
 						=='E' || idepth==1 
-						&& map.tubes[iphi][ieta][iTubeType].groove=='H')
-					gcf = map.tubes[iphi][ieta][iTubeType].had;
+						&& map.tubes[iphi][ieta][itube].groove=='H')
+					gcf = map.tubes[iphi][ieta][itube].had;
 				cout << gcf << endl;
 
 				//
@@ -426,19 +284,19 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//	Compute the (Qs - Ps) - (Qb - Pb)
 				//
 				fit(hRAW_S);
-				out->cd("Histos/1D/SIG");
+				vOut.rootFile->cd("Histos/1D/SRC");
 				hRAW_S->Write();
 				fit(hRAW_B);
-				out->cd("Histos/1D/BACK");
+				vOut.rootFile->cd("Histos/1D/BKG");
 				hRAW_B->Write();
 				fit(hRAW_S_F);
-				out->cd("Histos/1D_F");
+				vOut.rootFile->cd("Histos/1D_F");
 				hRAW_S_F->Write();
 				fit(hRAW_S_B);
-				out->cd("Histos/1D_B");
+				vOut.rootFile->cd("Histos/1D_B");
 				hRAW_S_B->Write();
 				fit(hRAW_S_B23);
-				out->cd("Histos/1D_B23");
+				vOut.rootFile->cd("Histos/1D_B23");
 				hRAW_S_B23->Write();
 
 				TF1 *fit_S = hRAW_S->GetFunction("myGaus");
@@ -454,301 +312,338 @@ void analyze(int hfSide, string inFileName, string outFileName, string outTxtFil
 				//
 				//	Fill the 2D maps of PED Mean/Sigmas
 				//
-				hPedMean_S[idepth]->Fill(2*iphi+1, ieta+29, qie_mean_S);
-				hPedMean_B[idepth]->Fill(2*iphi+1, ieta+29, qie_mean_B);
-				hPedSigma_S[idepth]->Fill(2*iphi+1, ieta+29, qie_sigma_S);
-				hPedSigma_B[idepth]->Fill(2*iphi+1, ieta+29, qie_sigma_B);
+				vOut.hPedMean_S[itube][idepth]->Fill(2*iphi+1, 
+						ieta+29, qie_mean_S);
+				vOut.hPedMean_B[itube][idepth]->Fill(2*iphi+1, 
+						ieta+29, qie_mean_B);
+				vOut.hPedSigma_S[itube][idepth]->Fill(2*iphi+1, 
+						ieta+29, qie_sigma_S);
+				vOut.hPedSigma_B[itube][idepth]->Fill(2*iphi+1, 
+						ieta+29, qie_sigma_B);
 
 				double ratio = getSwapRatio(hRAW_S, numTS);
-				hSwapRatio[idepth]->Fill(2*iphi+1, ieta+29, ratio);
+				vOut.hSwapRatio[itube][idepth]->Fill(2*iphi+1, ieta+29, ratio);
 
 				Double_t qie_mean_S_F = fit_S_F->GetParameter(1);
 				Double_t qie_mean_S_B = fit_S_B->GetParameter(1);
 				Double_t qie_mean_S_B23 = fit_S_B23->GetParameter(1);
-				Double_t totQSum_S = 0;
-				Double_t totQSum_B = 0;
-				Double_t totNSum_S = 0;
-				Double_t totNSum_B = 0;
-				Double_t totQSum_S_F = 0;
-				Double_t totNSum_S_F = 0;
-				Double_t totQSum_S_B = 0;
-				Double_t totNSum_S_B = 0;
-				Double_t totQSum_S_B23 = 0;
-				Double_t totNSum_S_B23 = 0;
+
+				Double_t totQSum_S_wOF = 0;
+				Double_t totQSum_B_wOF = 0;
+				Double_t totNSum_S_wOF = 0;
+				Double_t totNSum_B_wOF = 0;
+				Double_t totQSum_S_F_wOF = 0;
+				Double_t totNSum_S_F_wOF = 0;
+				Double_t totQSum_S_B_wOF = 0;
+				Double_t totNSum_S_B_wOF = 0;
+				Double_t totQSum_S_B23_wOF = 0;
+				Double_t totNSum_S_B23_wOF = 0;
+
 				Double_t totQSum_S_NoOF = 0;
 				Double_t totNSum_S_NoOF = 0;
 				Double_t totQSum_B_NoOF = 0;
 				Double_t totNSum_B_NoOF = 0;
+				Double_t totQSum_S_F_NoOF = 0;
+				Double_t totNSum_S_F_NoOF = 0;
+				Double_t totQSum_S_B_NoOF = 0;
+				Double_t totNSum_S_B_NoOF = 0;
+				Double_t totQSum_S_B23_NoOF = 0;
+				Double_t totNSum_S_B23_NoOF = 0;
 
-				if (ooo==true)
-				{
-					for (int iBin=0; iBin<NUMBINS; iBin++)
-						outTxt_4345 << hRAW_S->GetBinCenter(iBin+1) << "  ";
-					outTxt_4345 << endl;
-					ooo = false;
-				}
 
-				for (int iBin=0; iBin<(NUMBINS-1); iBin++)
+				for (int iBin=0; iBin<NUMBINS; iBin++)
 				{
-					totNSum_S += hRAW_S->GetBinContent(iBin+1)*
+					totNSum_S_wOF += hRAW_S->GetBinContent(iBin+1)*
 						hRAW_S->GetBinWidth(iBin+1);
-					totNSum_B += hRAW_B->GetBinContent(iBin+1)*
+					totNSum_B_wOF += hRAW_B->GetBinContent(iBin+1)*
 						hRAW_B->GetBinWidth(iBin+1);
-					totNSum_S_F += hRAW_S_F->GetBinContent(iBin+1)*
+					totNSum_S_F_wOF += hRAW_S_F->GetBinContent(iBin+1)*
 						hRAW_S_F->GetBinWidth(iBin+1);
-					totNSum_S_B += hRAW_S_B->GetBinContent(iBin+1)*
+					totNSum_S_B_wOF += hRAW_S_B->GetBinContent(iBin+1)*
 						hRAW_S_B->GetBinWidth(iBin+1);
-					totNSum_S_B23 += hRAW_S_B23->GetBinContent(iBin+1)*
+					totNSum_S_B23_wOF += hRAW_S_B23->GetBinContent(iBin+1)*
 						hRAW_S_B23->GetBinWidth(iBin+1);
-					totQSum_S+= hRAW_S->GetBinCenter(iBin+1)*
+
+					totQSum_S_wOF += hRAW_S->GetBinCenter(iBin+1)*
 						hRAW_S->GetBinContent(iBin+1)*
 						hRAW_S->GetBinWidth(iBin+1);
-					totQSum_B += hRAW_B->GetBinCenter(iBin+1)*
+					totQSum_B_wOF += hRAW_B->GetBinCenter(iBin+1)*
 						hRAW_B->GetBinContent(iBin+1)*
 						hRAW_B->GetBinWidth(iBin+1);
-					totQSum_S_F+=hRAW_S_F->GetBinCenter(iBin+1)*
+					totQSum_S_F_wOF +=hRAW_S_F->GetBinCenter(iBin+1)*
 						hRAW_S_F->GetBinContent(iBin+1)*
 						hRAW_S_F->GetBinWidth(iBin+1);
-					totQSum_S_B+=hRAW_S_B->GetBinCenter(iBin+1)*
+					totQSum_S_B_wOF +=hRAW_S_B->GetBinCenter(iBin+1)*
 						hRAW_S_B->GetBinContent(iBin+1)*
 						hRAW_S_B->GetBinWidth(iBin+1);
-					totQSum_S_B23 += hRAW_S_B23->GetBinCenter(iBin+1)*
+					totQSum_S_B23_wOF += hRAW_S_B23->GetBinCenter(iBin+1)*
 						hRAW_S_B23->GetBinContent(iBin+1)*
 						hRAW_S_B23->GetBinWidth(iBin+1);
 
+					if (iBin<31)
+					{
 						totNSum_S_NoOF += hRAW_S->GetBinContent(iBin+1)*
 							hRAW_S->GetBinWidth(iBin+1);
 						totNSum_B_NoOF += hRAW_B->GetBinContent(iBin+1)*
 							hRAW_B->GetBinWidth(iBin+1);
-						totQSum_S_NoOF += hRAW_S->GetBinContent(iBin+1)*
-							hRAW_S->GetBinWidth(iBin+1)*
-							hRAW_S->GetBinCenter(iBin+1);
-						totQSum_B_NoOF += hRAW_B->GetBinContent(iBin+1)*
-							hRAW_B->GetBinWidth(iBin+1)*
-							hRAW_B->GetBinCenter(iBin+1);
+						totNSum_S_F_NoOF += hRAW_S_F->GetBinContent(iBin+1)*
+							hRAW_S_F->GetBinWidth(iBin+1);
+						totNSum_S_B_NoOF += hRAW_S_B->GetBinContent(iBin+1)*
+							hRAW_S_B->GetBinWidth(iBin+1);
+						totNSum_S_B23_NoOF += hRAW_S_B23->GetBinContent(iBin+1)*
+							hRAW_S_B23->GetBinWidth(iBin+1);
+
+						totQSum_S_NoOF += hRAW_S->GetBinCenter(iBin+1)*
+							hRAW_S->GetBinContent(iBin+1)*
+							hRAW_S->GetBinWidth(iBin+1);
+						totQSum_B_NoOF += hRAW_B->GetBinCenter(iBin+1)*
+							hRAW_B->GetBinContent(iBin+1)*
+							hRAW_B->GetBinWidth(iBin+1);
+						totQSum_S_F_NoOF +=hRAW_S_F->GetBinCenter(iBin+1)*
+							hRAW_S_F->GetBinContent(iBin+1)*
+							hRAW_S_F->GetBinWidth(iBin+1);
+						totQSum_S_B_NoOF +=hRAW_S_B->GetBinCenter(iBin+1)*
+							hRAW_S_B->GetBinContent(iBin+1)*
+							hRAW_S_B->GetBinWidth(iBin+1);
+						totQSum_S_B23_NoOF += hRAW_S_B23->GetBinCenter(iBin+1)*
+							hRAW_S_B23->GetBinContent(iBin+1)*
+							hRAW_S_B23->GetBinWidth(iBin+1);
+					}
 				}
 
-				Double_t speQ_S = totQSum_S/totNSum_S - qie_mean_S;
-				Double_t speQ_B = totQSum_B/totNSum_B - qie_mean_B;
-				Double_t signal_S_NoOF = totQSum_S_NoOF/totNSum_S_NoOF - qie_mean_S;
-				Double_t signal_B_NoOF = totQSum_B_NoOF/totNSum_B_NoOF - qie_mean_B;
-				Double_t signal_NoOF = signal_S_NoOF - signal_B_NoOF;
-				Double_t signal_NoOF_wGCF = signal_NoOF/gcf;
-				Double_t speQ_UNCORR = speQ_S - speQ_B;
-				Double_t speQ_CORR = speQ_UNCORR/gcf;
-//				Double_t speQ_UNCORR = signal_NoOF;
-//				Double_t speQ_CORR = signal_NoOF_wGCF;
-
-				Double_t speQ_S_F = totQSum_S_F/totNSum_S_F - qie_mean_S_F;
-				Double_t speQ_S_B = totQSum_S_B/totNSum_S_B - qie_mean_S_B;
-				Double_t signal_S_B23 = totQSum_S_B23/totNSum_S_B23 - 
+				Double_t signal_S_wOF = totQSum_S_wOF/totNSum_S_wOF - 
+					qie_mean_S;
+				Double_t signal_B_wOF = totQSum_B_wOF/totNSum_B_wOF - 
+					qie_mean_B;
+				Double_t signal_S_F_wOF = totQSum_S_F_wOF/totNSum_S_F_wOF - 
+					qie_mean_S_F;
+				Double_t signal_S_B_wOF = totQSum_S_B_wOF/totNSum_S_B_wOF - 
+					qie_mean_S_B;
+				Double_t signal_S_B23_wOF = totQSum_S_B23_wOF/totNSum_S_B23_wOF- 
 					qie_mean_S_B23;
-				Double_t signal_S_B23_mBG = signal_S_B23 - speQ_B;
-				Double_t speQ_S_F_mBG = speQ_S_F - speQ_B;
-				Double_t speQ_S_B_mBG = speQ_S_B - speQ_B;
-				Double_t ratioSFSB = speQ_S_F_mBG/speQ_S_B_mBG;
-				Double_t ratio_S_B23toS = signal_S_B23_mBG/speQ_UNCORR;
+
+				Double_t signal_S_NoOF = totQSum_S_NoOF/totNSum_S_NoOF - 
+					qie_mean_S;
+				Double_t signal_B_NoOF = totQSum_B_NoOF/totNSum_B_NoOF - 
+					qie_mean_B;
+				Double_t signal_S_F_NoOF = totQSum_S_F_NoOF/totNSum_S_F_NoOF - 
+					qie_mean_S_F;
+				Double_t signal_S_B_NoOF = totQSum_S_B_NoOF/totNSum_S_B_NoOF - 
+					qie_mean_S_B;
+				Double_t signal_S_B23_NoOF =
+					totQSum_S_B23_NoOF/totNSum_S_B23_NoOF - qie_mean_S_B23;
+
+				Double_t signal_wOF_UNCORR = signal_S_wOF - signal_B_wOF;
+				Double_t signal_F_wOF_UNCORR = signal_S_F_wOF - signal_B_wOF;
+				Double_t signal_B_wOF_UNCORR = signal_S_B_wOF - signal_B_wOF;
+				Double_t signal_B23_wOF_UNCORR = signal_S_B23_wOF - signal_B_wOF;
+
+				Double_t signal_NoOF_UNCORR = signal_S_NoOF - signal_B_NoOF;
+				Double_t signal_F_NoOF_UNCORR = signal_S_F_NoOF - signal_B_NoOF;
+				Double_t signal_B_NoOF_UNCORR = signal_S_B_NoOF - signal_B_NoOF;
+				Double_t signal_B23_NoOF_UNCORR = signal_S_B23_NoOF - 
+					signal_B_NoOF;
+				
+				Double_t signal_wOF_CORR = signal_wOF_UNCORR/gcf;
+				Double_t signal_F_wOF_CORR = signal_F_wOF_UNCORR/gcf;
+				Double_t signal_B_wOF_CORR = signal_B_wOF_UNCORR/gcf;
+				Double_t signal_B23_wOF_CORR = signal_B23_wOF_UNCORR/gcf;
+				
+				Double_t signal_NoOF_CORR = signal_NoOF_UNCORR/gcf;
+				Double_t signal_F_NoOF_CORR = signal_F_NoOF_UNCORR/gcf;
+				Double_t signal_B_NoOF_CORR = signal_B_NoOF_UNCORR/gcf;
+				Double_t signal_B23_NoOF_CORR = signal_B23_NoOF_UNCORR/gcf;
+
+				Double_t ratioSFSB_wOF = signal_F_wOF_CORR/signal_B_wOF_CORR;
+				Double_t ratioB23toS_wOF = signal_B23_wOF_CORR/signal_wOF_CORR;
+				
+				Double_t ratioSFSB_NoOF = signal_F_NoOF_CORR/signal_B_NoOF_CORR;
+				Double_t ratioB23toS_NoOF = signal_B23_NoOF_CORR/
+					signal_NoOF_CORR;
+
+				Double_t ratio_NoOF2wOF = signal_NoOF_CORR/signal_wOF_CORR;
+				vOut.hRatio_NoOF2wOF->Fill(ratio_NoOF2wOF);
 
 				//
 				//	Fill the Histos, Profiles, Graphs...
 				//
-				cout << speQ_S << "  " << speQ_B << endl;
-				cout << speQ_UNCORR << "  " << speQ_CORR << endl;
-				cout << speQ_S_F << "  " << speQ_S_B << endl;
-				cout << speQ_S_F_mBG << "  " << speQ_S_B_mBG << endl;
-				cout << totNSum_S_F << "  " << totNSum_S_B << endl;
-				cout << totQSum_S_F << "  " << totQSum_S_B << endl;
-				pSPEvsETA_UNCORR[idepth]->Fill(ieta+29, speQ_UNCORR);
-				pSPEvsETA_CORR[idepth]->Fill(ieta+29, speQ_CORR);
-				pSFoverSB[idepth]->Fill(ieta+29, ratioSFSB);
-				pSFoverSB_D12->Fill(ieta+29, ratioSFSB);
-				pSPEvsPHI_Avg[idepth]->Fill(2*iphi+1, speQ_CORR);
-				pSFSBvsPHI_Avg[idepth]->Fill(2*iphi+1, ratioSFSB);
-				pSPEvsPHI[ieta][idepth]->Fill(2*iphi+1, speQ_CORR);
-				pSPEvsPHI[ieta][idepth]->Fill(2*iphi+1, speQ_CORR+0.0000001);
-				pSFSBvsPHI[ieta][idepth]->Fill(2*iphi+1, ratioSFSB);
-				pSFSBvsPHI[ieta][idepth]->Fill(2*iphi+1, ratioSFSB+0.000001);
+				vOut.pSignalvsETA_UNCORR[itube][idepth][0]->Fill(ieta+29, 
+						signal_wOF_UNCORR);
+				vOut.pSignalvsETA_CORR[itube][idepth][0]->Fill(ieta+29, 
+						signal_wOF_CORR);
+				vOut.pSFSBvsETA[itube][idepth][0]->Fill(ieta+29, 
+						ratioSFSB_wOF);
+				vOut.pSB23toSvsETA[itube][idepth][0]->Fill(ieta+29,
+						ratioB23toS_wOF);
 
+				vOut.pSignalvsETA_UNCORR[itube][idepth][1]->Fill(ieta+29, 
+						signal_NoOF_UNCORR);
+				vOut.pSignalvsETA_CORR[itube][idepth][1]->Fill(ieta+29, 
+						signal_NoOF_CORR);
+				vOut.pSFSBvsETA[itube][idepth][1]->Fill(ieta+29, 
+						ratioSFSB_NoOF);
+				vOut.pSB23toSvsETA[itube][idepth][1]->Fill(ieta+29,
+						ratioB23toS_NoOF);
 
-				hSPE_UNCORR->Fill(speQ_UNCORR);
-				hSPE_CORR->Fill(speQ_CORR);
-				if ((2*iphi+1)==43 || (2*iphi+1)==45)
-				{
-					hSignal_4345[idepth]->Fill(speQ_CORR);
-					hSignal_UNCORR_4345[idepth]->Fill(speQ_UNCORR);
+				vOut.hSFSB[itube][idepth][0]->Fill(ratioSFSB_wOF);
+				vOut.hSB23toS[itube][idepth][0]->Fill(ratioB23toS_wOF);
+				
+				vOut.hSFSB[itube][idepth][1]->Fill(ratioSFSB_NoOF);
+				vOut.hSB23toS[itube][idepth][1]->Fill(ratioB23toS_NoOF);
 
-					Double_t S1G1_4345 = signal_NoOF_wGCF/
-						gainMap[iphi][ieta][idepth].gain_OV1;
-					Double_t signal_OV2_4345 = S1G1_4345*
-						gainMap[iphi][ieta][idepth].gain_OV2;
-					Double_t adc2GeV_OV1_4345 = GEVPER25NS[idepth]/
-						signal_NoOF_wGCF;
-					Double_t adc2GeV_OV1_4345_CORR = adc2GeV_OV1_4345*
-						SOURCEACTIVITYCORRECTION[hfSide];
-					Double_t adc2GeV_OV2_4345 = GEVPER25NS[idepth]/signal_OV2_4345;
-					Double_t adc2GeV_OV2_4345_CORR = adc2GeV_OV2_4345*
-						SOURCEACTIVITYCORRECTION[hfSide];
-
-					outTxt_4345 << 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
-						<< "  " << gcf << "  " << signal_NoOF_wGCF 
-						<< "  " << adc2GeV_OV1_4345_CORR
-						<< "  " << adc2GeV_OV2_4345_CORR
-						<< "  " 
-						<< gainMap[iphi][ieta][idepth].gain_OV1
-						<< "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV2
-						<< endl;
-//						<< "  " << signal_NoOF << "  " 
-//						<< signal_S_NoOF << "  " << signal_B_NoOF << "  "
-//						<< qie_mean_S << "  " << qie_mean_B << endl;
-				}
-				hSFoverSB[idepth]->Fill(ratioSFSB);
-				hSFoverSB_D12->Fill(ratioSFSB);
-				hSB23toS[idepth]->Fill(ratio_S_B23toS);
-				hSB23toS_D12->Fill(ratio_S_B23toS);
-				pSB23toS[idepth]->Fill(ieta+29, ratio_S_B23toS);
-				pSB23toS_D12->Fill(ieta+29, ratio_S_B23toS);
-
-				//
-				//	Plot SPE vs Gain
-				//
-				if (numTS==1)
-					gSPEvsGain->SetPoint(counter_Gain, 
-							gainMap[iphi][ieta][idepth].gain_OV1, speQ_CORR);
-				else if (numTS==2)
-					gSPEvsGain->SetPoint(counter_Gain, 
-							gainMap[iphi][ieta][idepth].gain_OV1P100, 
-							speQ_CORR);
-
-				double signal = speQ_CORR;
-				double S1G1(0), signal_OV2(0), adc2GeV(0), adc2GeV_CORR(0);
 				double gain_OV1 = gainMap[iphi][ieta][idepth].gain_OV1;
 				double gain_OV1P100 = gainMap[iphi][ieta][idepth].gain_OV1P100;
 				double gain_OV2 = gainMap[iphi][ieta][idepth].gain_OV2;
+				double gainToUse, timeFactor;
+
+				//
+				//	Compute and Fill the Gain Ratio.
+				//	OV2/OV1
+				//
 				double gainRatio(0);
-				if (numTS == 1)
+				if (itube==0)
 				{
-					S1G1 = signal/gain_OV1;
-					signal_OV2 = signal/gain_OV1*gain_OV2;
-					adc2GeV = GEVPER25NS[idepth]/signal_OV2;
-					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION[hfSide];
 					gainRatio = gain_OV2/gain_OV1;
+					vOut.hGainsRatio->Fill(gainRatio);
 				}
-				else if (numTS == 2)
-				{
-					S1G1 = signal/gain_OV1P100/2.;
-					signal_OV2 = S1G1*gain_OV2;
-					adc2GeV = GEVPER25NS[idepth]/signal_OV2;
-					adc2GeV_CORR = adc2GeV*SOURCEACTIVITYCORRECTION[hfSide];
-					gainRatio = gain_OV2/gain_OV1P100;
-				}
-				hADC2GeV_Map_OV2[idepth]->Fill(2*iphi+1, ieta+29, adc2GeV_CORR);
-				hSignal_OV2[idepth]->Fill(signal_OV2);
-				hADC2GeV_OV2[idepth]->Fill(adc2GeV);
-				hADC2GeV_OV2_CORR[idepth]->Fill(adc2GeV_CORR);
-				hGainsRatio->Fill(gainRatio);
 
+				//	set TS-dependent parameters
 				if (numTS==1)
-					outTxt << iTubeType << "  " << gcf << "  "
-						<< 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
-						<< "  " << speQ_CORR << "  " << signal_OV2 << "  "
-						<< ratio_S_B23toS << "  "
-						<< adc2GeV_CORR << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV1 << "  "
-						<< qie_mean_S << "  " 
-						<< gainMap[iphi][ieta][idepth].gain_OV2 << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV1P100
-						<< endl;
+				{
+					timeFactor = 1;
+					gainToUse = gain_OV1;
+				}
 				else if (numTS==2)
-					outTxt << iTubeType << "  " << gcf << "  "
-						<< 2*iphi+1 << "  " << ieta+29 << "  " << idepth+1
-						<< "  " << speQ_CORR << "  " << signal_OV2 << "  "
-						<< ratio_S_B23toS << "  "
-						<< adc2GeV_CORR << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV1 << "  "
-						<< qie_mean_S << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV2 << "  "
-						<< gainMap[iphi][ieta][idepth].gain_OV1P100
-						<< endl;
+				{
+					timeFactor = 0.5;
+					gainToUse = gain_OV1P100;
+				}
 
-				counter_Gain++;
+				//
+				//	Compute:
+				//
+				//
+				Double_t signal_OV2_wOF = timeFactor*signal_wOF_CORR*
+					gain_OV2/gainToUse;
+				Double_t adc2GeV_OV2_wOF = GEVPER25NS[idepth]/signal_OV2_wOF*
+					SOURCEACTIVITYCORRECTION[hfSide];
+
+				Double_t signal_OV2_NoOF = timeFactor*signal_NoOF_CORR*
+					gain_OV2/gainToUse;
+				Double_t adc2GeV_OV2_NoOF = GEVPER25NS[idepth]/signal_OV2_NoOF*
+					SOURCEACTIVITYCORRECTION[hfSide];
+
+				vOut.hSignal_UNCORR[itube][idepth][0]->Fill(signal_wOF_UNCORR);
+				vOut.hSignal_UNCORR[itube][idepth][1]->Fill(signal_NoOF_UNCORR);
+				vOut.hSignal_CORR[itube][idepth][0]->Fill(signal_wOF_CORR);
+				vOut.hSignal_CORR[itube][idepth][1]->Fill(signal_NoOF_CORR);
+				vOut.hSignal_OV2[itube][idepth][0]->Fill(signal_OV2_wOF);
+				vOut.hSignal_OV2[itube][idepth][1]->Fill(signal_OV2_NoOF);
+				vOut.hADC2GeV_OV2_CORR[itube][idepth][0]->Fill(adc2GeV_OV2_wOF);
+				vOut.hADC2GeV_OV2_CORR[itube][idepth][1]->Fill(adc2GeV_OV2_NoOF);
+
+				//
+				//	Print the Results to txt File
+				//
+				vOut.txtFile
+					<< itube << " " << 2*iphi+1 << " " << ieta+29 << " " 
+					<< idepth << " " << gcf << " " 
+					<< signal_S_NoOF << " " << signal_B_NoOF << " "
+					<< qie_mean_S << " " << qie_mean_B << " "
+					<< signal_wOF_CORR << " "
+					<< signal_NoOF_CORR << " " << signal_OV2_wOF << " " 
+					<< signal_OV2_NoOF << " " << adc2GeV_OV2_wOF << " "
+					<< adc2GeV_OV2_NoOF << " " << gain_OV2 << " "
+					<< gain_OV1 << " " << gain_OV1P100
+					<< endl;
 			}
-
-	for (int ieta=0; ieta<NUMETAS; ieta++)
-	{
-		for (int idepth=0; idepth<NUMDEPTHS; idepth++)
-		{
-			pSPEvsPHI[ieta][idepth]->GetXaxis()->SetTitle("iphi");
-			pSPEvsPHI[ieta][idepth]->GetYaxis()->SetTitle("Signal(Corr. by GCF)");
-			pSPEvsPHI[ieta][idepth]->GetYaxis()->SetTitleOffset(1.2);
-			pSFSBvsPHI[ieta][idepth]->GetXaxis()->SetTitle("ieta");
-			pSFSBvsPHI[ieta][idepth]->GetYaxis()->SetTitle("SF/SB");
-			pSFSBvsPHI[ieta][idepth]->GetYaxis()->SetTitleOffset(1.2);
-			pSFSBvsPHI[ieta][idepth]->GetYaxis()->SetRangeUser(0.8, 1.2);
-			if (numTS==1)
-				pSPEvsPHI[ieta][idepth]->GetYaxis()->SetRangeUser(0.001, 0.01);
-			else if (numTS==2)
-				pSPEvsPHI[ieta][idepth]->GetYaxis()->SetRangeUser(0.01, 0.1);
-		}
-	}
 
 	//
 	//	Save and Close
 	//
+	for (itube=0; itube<NUMTUBETYPES; itube++)
 	for (int i=1; i<=2; i++)
 	{
-		pSPEvsETA_UNCORR[i-1]->GetXaxis()->SetTitle("ieta");
-		pSPEvsETA_UNCORR[i-1]->GetYaxis()->SetTitle("Signal");
-		pSPEvsETA_UNCORR[i-1]->GetYaxis()->SetTitleOffset(1.2);
-		pSPEvsETA_CORR[i-1]->GetXaxis()->SetTitle("ieta");
-		pSPEvsETA_CORR[i-1]->GetYaxis()->SetTitle("Signal(Corr. by GCF)");
-		pSPEvsETA_CORR[i-1]->GetYaxis()->SetTitleOffset(1.2);
-		pSPEvsPHI_Avg[i-1]->GetXaxis()->SetTitle("iphi");
-		pSPEvsPHI_Avg[i-1]->GetYaxis()->SetTitle("Signal(Corr. by GCF)");
-		pSPEvsPHI_Avg[i-1]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSignalvsETA_UNCORR[itube][i-1][0]->GetXaxis()->SetTitle("ieta");
+		vOut.pSignalvsETA_UNCORR[itube][i-1][1]->GetXaxis()->SetTitle("ieta");
+		vOut.pSignalvsETA_UNCORR[itube][i-1][0]->GetYaxis()->SetTitle("Signal");
+		vOut.pSignalvsETA_UNCORR[itube][i-1][1]->GetYaxis()->SetTitle("Signal");
+		vOut.pSignalvsETA_UNCORR[itube][i-1][0]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSignalvsETA_UNCORR[itube][i-1][1]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSignalvsETA_CORR[itube][i-1][0]->GetXaxis()->SetTitle("ieta");
+		vOut.pSignalvsETA_CORR[itube][i-1][1]->GetXaxis()->SetTitle("ieta");
+		vOut.pSignalvsETA_CORR[itube][i-1][1]->GetYaxis()
+			->SetTitle("Signal(Corr. by GCF)");
+		vOut.pSignalvsETA_CORR[itube][i-1][1]->GetYaxis()
+			->SetTitle("Signal(Corr. by GCF)");
+		vOut.pSignalvsETA_CORR[itube][i-1][0]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSignalvsETA_CORR[itube][i-1][1]->GetYaxis()->SetTitleOffset(1.2);
 		if (numTS==1)
 		{
-			pSPEvsETA_UNCORR[i-1]->GetYaxis()->SetRangeUser(0.001, 0.01);
-			pSPEvsETA_CORR[i-1]->GetYaxis()->SetRangeUser(0.001, 0.01);
-			pSPEvsPHI_Avg[i-1]->GetYaxis()->SetRangeUser(0.001, 0.01);
+			vOut.pSignalvsETA_UNCORR[itube][i-1][0]->GetYaxis()
+				->SetRangeUser(0.001, 0.01);
+			vOut.pSignalvsETA_UNCORR[itube][i-1][1]->GetYaxis()
+				->SetRangeUser(0.001, 0.01);
+			vOut.pSignalvsETA_CORR[itube][i-1][0]->GetYaxis()
+				->SetRangeUser(0.001, 0.01);
+			vOut.pSignalvsETA_CORR[itube][i-1][1]->GetYaxis()
+				->SetRangeUser(0.001, 0.01);
 		}
 		else if (numTS==2)
 		{
-			pSPEvsETA_UNCORR[i-1]->GetYaxis()->SetRangeUser(0.01, 0.1);
-			pSPEvsETA_CORR[i-1]->GetYaxis()->SetRangeUser(0.01, 0.1);
-			pSPEvsPHI_Avg[i-1]->GetYaxis()->SetRangeUser(0.01, 0.1);
+			vOut.pSignalvsETA_UNCORR[itube][i-1][0]->GetYaxis()
+				->SetRangeUser(0.01, 0.1);
+			vOut.pSignalvsETA_UNCORR[itube][i-1][1]->GetYaxis()
+				->SetRangeUser(0.01, 0.1);
+			vOut.pSignalvsETA_CORR[itube][i-1][0]->GetYaxis()
+				->SetRangeUser(0.01, 0.1);
+			vOut.pSignalvsETA_CORR[itube][i-1][1]->GetYaxis()
+				->SetRangeUser(0.01, 0.1);
 		}
 
-		pSFoverSB[i-1]->GetXaxis()->SetTitle("ieta");
-		pSFoverSB[i-1]->GetYaxis()->SetTitle("SF/SB");
-		pSFoverSB[i-1]->GetYaxis()->SetTitleOffset(1.2);
-		pSFoverSB[i-1]->GetYaxis()->SetRangeUser(0.8, 1.2);
+		vOut.pSFSBvsETA[itube][i-1][0]->GetXaxis()->SetTitle("ieta");
+		vOut.pSFSBvsETA[itube][i-1][1]->GetXaxis()->SetTitle("ieta");
+		vOut.pSFSBvsETA[itube][i-1][0]->GetYaxis()->SetTitle("SF/SB");
+		vOut.pSFSBvsETA[itube][i-1][1]->GetYaxis()->SetTitle("SF/SB");
+		vOut.pSFSBvsETA[itube][i-1][0]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSFSBvsETA[itube][i-1][1]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSFSBvsETA[itube][i-1][0]->GetYaxis()->SetRangeUser(0.8, 1.2);
+		vOut.pSFSBvsETA[itube][i-1][1]->GetYaxis()->SetRangeUser(0.8, 1.2);
 
-		pSB23toS[i-1]->GetXaxis()->SetTitle("ieta");
-		pSB23toS[i-1]->GetYaxis()->SetTitle("SB2_3/SAll");
-		pSB23toS[i-1]->GetYaxis()->SetTitleOffset(1.2);
-		pSB23toS[i-1]->GetYaxis()->SetRangeUser(0.8, 1.2);
+		vOut.pSB23toSvsETA[itube][i-1][0]->GetXaxis()->SetTitle("ieta");
+		vOut.pSB23toSvsETA[itube][i-1][1]->GetXaxis()->SetTitle("ieta");
+		vOut.pSB23toSvsETA[itube][i-1][0]->GetYaxis()->SetTitle("SB2_3/SAll");
+		vOut.pSB23toSvsETA[itube][i-1][1]->GetYaxis()->SetTitle("SB2_3/SAll");
+		vOut.pSB23toSvsETA[itube][i-1][0]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSB23toSvsETA[itube][i-1][1]->GetYaxis()->SetTitleOffset(1.2);
+		vOut.pSB23toSvsETA[itube][i-1][0]->GetYaxis()->SetRangeUser(0.8, 1.2);
+		vOut.pSB23toSvsETA[itube][i-1][1]->GetYaxis()->SetRangeUser(0.8, 1.2);
 
-		pSFSBvsPHI_Avg[i-1]->GetXaxis()->SetTitle("iphi");
-		pSFSBvsPHI_Avg[i-1]->GetYaxis()->SetTitle("SF/SB");
-		pSFSBvsPHI_Avg[i-1]->GetYaxis()->SetTitleOffset(1.2);
-		pSFSBvsPHI_Avg[i-1]->GetYaxis()->SetRangeUser(0.8, 1.2);
+		vOut.hSFSB[itube][i-1][0]->GetXaxis()->SetTitle("SF/SB");
+		vOut.hSFSB[itube][i-1][1]->GetXaxis()->SetTitle("SF/SB");
+		vOut.hSB23toS[itube][i-1][0]->GetXaxis()->SetTitle("SB2_3/SAll");
+		vOut.hSB23toS[itube][i-1][1]->GetXaxis()->SetTitle("SB2_3/SAll");
 
-		hSFoverSB[i-1]->GetXaxis()->SetTitle("SF/SB");
-		hSB23toS[i-1]->GetXaxis()->SetTitle("SB2_3/SAll");
+		vOut.hSignal_UNCORR[itube][i-1][0]->GetXaxis()
+			->SetTitle("Signal_UNCORR");
+		vOut.hSignal_UNCORR[itube][i-1][1]->GetXaxis()
+			->SetTitle("Signal_UNCORR");
+		vOut.hSignal_CORR[itube][i-1][0]->GetXaxis()
+			->SetTitle("Signal_CORR");
+		vOut.hSignal_CORR[itube][i-1][1]->GetXaxis()
+			->SetTitle("Signal_CORR");
+		vOut.hSignal_OV2[itube][i-1][0]->GetXaxis()
+			->SetTitle("Signal_OV2");
+		vOut.hSignal_OV2[itube][i-1][1]->GetXaxis()
+			->SetTitle("Signal_OV2");
+		vOut.hADC2GeV_OV2_CORR[itube][i-1][0]->GetXaxis()
+			->SetTitle("ADC2GeV @OV2");
+		vOut.hADC2GeV_OV2_CORR[itube][i-1][1]->GetXaxis()
+			->SetTitle("ADC2GeV @OV2");
 	}
-	pSFoverSB_D12->GetXaxis()->SetTitle("ieta");
-	pSFoverSB_D12->GetYaxis()->SetTitle("SF/SB");
-	pSFoverSB_D12->GetYaxis()->SetTitleOffset(1.1);
-	pSFoverSB_D12->GetYaxis()->SetRangeUser(0.8, 1.2);
-	hSFoverSB_D12->GetXaxis()->SetTitle("SF/SB");
-	hSPE_UNCORR->GetXaxis()->SetTitle("Signal");
-	hSPE_CORR->GetXaxis()->SetTitle("Signal(Corr. by GCF)");
 
-	out->cd("Graphs");
-	gSPEvsGain->Write();
-
-	out->Write();
+	vOut.hGainsRatio->GetXaxis()->SetTitle("Gain Ratios OV2/OV1");
+	vOut.rootFile->Write();
 
 	return;
 }
@@ -1066,6 +961,130 @@ int initSwaps()
 	
 }
 
+int initOut(TOut &out, int iTS, string rootFileName, string txtFileName)
+{
+	out.rootFile = new TFile(rootFileName.c_str(), "recreate");
+	out.txtFile.open(txtFileName.c_str());
+
+	out.rootFile->mkdir("Profiles");
+	out.rootFile->mkdir("Histos");
+	out.rootFile->mkdir("Graphs");
+
+	out.rootFile->cd("Histos");
+	gDirectory->mkdir("2D");
+	gDirectory->mkdir("1D");
+	gDirectory->mkdir("1D_F");
+	gDirectory->mkdir("1D_B");
+	gDirectory->mkdir("1D_B23");
+	gDirectory->cd("1D");
+	gDirectory->mkdir("SRC");
+	gDirectory->mkdir("BKG");
+
+	char histName[200];
+	out.hGainsRatio = new TH1D("GainsRatio", "GainsRatio", 100, 0, 1);
+	out.hRatio_NoOF2wOF = new TH1D("Ratio_NoOF2wOF", 
+			"Ratio NoOF2wOF", 100, 0, 2);
+	for (int itube=0; itube<NUMTUBETYPES; itube++)
+	{
+		for (int id=0; id<NUMDEPTHS; id++)
+		{
+			out.rootFile->cd("Profiles");
+
+			for (int iOF=0; iOF<2; iOF++)
+			{
+				sprintf(histName, "SignalvsETA_UNCORR_TT%d_D%d_%s", itube, id+1,
+						(iOF==0) ? "withOF" : "withoutOF");
+				out.pSignalvsETA_UNCORR[itube][id][iOF] = new TProfile(histName,
+						histName, 13, 29, 42);
+				sprintf(histName, "SignalvsETA_CORR_TT%d_D%d_%s", itube, id+1,
+						(iOF==0) ? "withOF" : "withoutOF");
+				out.pSignalvsETA_CORR[itube][id][iOF] = new TProfile(histName, 
+						histName, 13, 29, 42);
+				sprintf(histName, "SFSBvsETA_TT%d_D%d_%s", itube, id+1,
+						iOF==0 ? "withOF" : "withoutOF");
+				out.pSFSBvsETA[itube][id][iOF] = new TProfile(histName, histName,
+						13, 29, 42);
+				sprintf(histName, "SB23toSvsETA_TT%d_D%d_%s", itube, id+1,
+						iOF==0 ? "withOF" : "withoutOF");
+				out.pSB23toSvsETA[itube][id][iOF] = new TProfile(histName, 
+						histName, 13, 29, 42);
+			}
+
+			out.rootFile->cd("Histos/2D");
+
+			sprintf(histName, "PedMean_S_TT%d_D%d", itube, id+1);
+			out.hPedMean_S[itube][id] = new TH2D(histName, histName,
+					72, 0, 72, 13, 29, 42);
+			sprintf(histName, "PedMean_B_TT%d_D%d", itube, id+1);
+			out.hPedMean_B[itube][id] = new TH2D(histName, histName,
+					72, 0, 72, 13, 29, 42);
+			sprintf(histName, "PedSigma_S_TT%d_D%d", itube, id+1);
+			out.hPedSigma_S[itube][id] = new TH2D(histName, histName,
+					72, 0, 72, 13, 29, 42);
+			sprintf(histName, "PedSigma_B_TT%d_D%d", itube, id+1);
+			out.hPedSigma_B[itube][id] = new TH2D(histName, histName,
+					72, 0, 72, 13, 29, 42);
+			sprintf(histName, "SwapRatio_TT%d_D%d", itube, id+1);
+			out.hSwapRatio[itube][id] = new TH2D(histName, histName,
+					72, 0, 72, 13, 29, 42);
+//			sprintf(histName, "ADC2GeV_OV2_TT%d_D%d", itube. id+1);
+//			out.hADC2GeV_OV2[itube][id] = new TH2D(histName ,histName, 
+//					72, 0, 72, 13, 29, 42);
+
+			out.rootFile->cd("Histos/1D");
+
+			for (int iOF=0; iOF<2; iOF++)
+			{
+				if (iTS==1)
+				{
+					sprintf(histName, "Signal_UNCORR_TT%d_D%d_%s", itube, id+1,
+							iOF==0 ? "withOF" : "withoutOF");
+					out.hSignal_UNCORR[itube][id][iOF] = new TH1D(histName, 
+							histName, 100, 0, 0.02);
+					sprintf(histName, "Signal_CORR_TT%d_D%d_%s", itube, id+1,
+							iOF==0 ? "withOF" : "withoutOF");
+					out.hSignal_CORR[itube][id][iOF] = new TH1D(histName, 
+							histName, 100, 0, 0.02);
+				}
+				else 
+				{
+					sprintf(histName, "Signal_UNCORR_TT%d_D%d_%s", itube, id+1,
+							iOF==0 ? "withOF" : "withoutOF");
+					out.hSignal_UNCORR[itube][id][iOF] = new TH1D(histName, 
+							histName, 1000, 0, 0.2);
+					sprintf(histName, "Signal_CORR_TT%d_D%d_%s", itube, id+1,
+							iOF==0 ? "withOF" : "withoutOF");
+					out.hSignal_CORR[itube][id][iOF] = new TH1D(histName, 
+							histName, 1000, 0, 0.2);
+				}
+
+				sprintf(histName, "Signal_OV2_TT%d_D%d_%s", itube, id+1,
+						iOF==0 ? "withOF" : "withoutOF");
+				out.hSignal_OV2[itube][id][iOF] = new TH1D(histName, histName,
+						1000, 0, 0.02);
+				sprintf(histName, "ADC2GeV_OV2_UNCORR_TT%d_D%d_%s", itube, id+1,
+						iOF==0 ? "withOF" : "withoutOF");
+				out.hADC2GeV_OV2_UNCORR[itube][id][iOF] = new TH1D(histName,
+						histName, 1000, 0, 2);
+				sprintf(histName, "ADC2GeV_OV2_CORR_TT%d_D%d_%s", itube, id+1,
+						iOF==0 ? "withOF" : "withoutOF");
+				out.hADC2GeV_OV2_CORR[itube][id][iOF] = new TH1D(histName, 
+						histName, 1000, 0, 2);
+				sprintf(histName, "SFSB_TT%d_D%d_%s", itube, id+1, 
+						iOF==0 ? "withOF" : "withoutOF");
+				out.hSFSB[itube][id][iOF] = new TH1D(histName, histName,
+						100, 0, 2);
+				sprintf(histName, "SB23toS_TT%d_D%d_%s", itube, id+1,
+						iOF==0 ? "withOF" : "withoutOF");
+				out.hSB23toS[itube][id][iOF] = new TH1D(histName, histName,
+						100, 0, 2);
+			}
+		}
+	}
+
+	return 0;
+}
+
 //
 //	Fit the Histo
 //
@@ -1081,7 +1100,7 @@ void fit(TH1D *hist)
 	TF1 *myGaus = new TF1("myGaus", "gaus", min, max);
 	hist->SetLineColor(kBlack);
 	myGaus->SetLineColor(kRed);
-	hist->Fit("myGaus", "R");
+	hist->Fit("myGaus", "QR");
 }
 
 //

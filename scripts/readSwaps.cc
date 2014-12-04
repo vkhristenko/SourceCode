@@ -21,6 +21,7 @@ struct TChSwap
 {
 	int o_iphi, o_ieta, o_depth;
 	int f_iphi, f_ieta, f_depth;
+	int o_itube, f_itube;
 };
 
 struct TSrcError
@@ -28,6 +29,7 @@ struct TSrcError
 	int iphi, ieta;
 	int q1TS;
 	int q2TS;
+	int itube;
 };
 
 typedef TChSwap TChSwaps[MAXSWAPS];
@@ -43,11 +45,12 @@ struct TSwaps
 	TSrcErrors srcErrors;
 };
 
-int isTubeSwap(TSwaps &swaps, int iphi, int ieta)
+int isTubeSwap(TSwaps &swaps, int iphi, int ieta, int itube)
 {
 	int iswap = -1;
 	for (int i=0; i<swaps.numTubeSwaps; i++)
-		if (iphi==swaps.tubeSwaps[i].o_iphi && ieta==swaps.tubeSwaps[i].o_ieta)
+		if (iphi==swaps.tubeSwaps[i].o_iphi && ieta==swaps.tubeSwaps[i].o_ieta
+				&& itube==swaps.tubeSwaps[i].o_itube)
 		{
 			iswap = i;	
 			break;
@@ -70,11 +73,12 @@ int isChSwap(TSwaps &swaps, int iphi, int ieta, int depth)
 	return iswap;
 }
 
-int isSrcError(TSwaps &swaps, int iphi, int ieta, int iTS)
+int isSrcError(TSwaps &swaps, int iphi, int ieta, int itube, int iTS)
 {
 	int iswap = 0;
 	for (int i=0; i<swaps.numSrcErrors; i++)
-		if (iphi==swaps.srcErrors[i].iphi && ieta==swaps.srcErrors[i].ieta)
+		if (iphi==swaps.srcErrors[i].iphi && ieta==swaps.srcErrors[i].ieta
+				&& itube==swaps.srcErrors[i].itube)
 		{
 			if (iTS==1)
 				iswap = swaps.srcErrors[i].q1TS;
@@ -91,6 +95,7 @@ void readSwaps(string inSwapsFileName, TSwaps &swaps, int verbosity=0)
 	int numChSwaps, numTubeSwaps, numSrcErrors;
 	int o_iphi, o_ieta, o_depth, f_iphi, f_ieta, f_depth;
 	int q1TS, q2TS;
+	int o_itube, f_itube, itube;
 
 	//
 	//	Parse the Swaps file
@@ -111,21 +116,24 @@ void readSwaps(string inSwapsFileName, TSwaps &swaps, int verbosity=0)
 	swaps.numTubeSwaps = numTubeSwaps;
 	for (int iTubeSwap=0; iTubeSwap<numTubeSwaps; iTubeSwap++)
 	{
-		in >> o_iphi >> o_ieta >> f_iphi >> f_ieta;
+		in >> o_iphi >> o_ieta >> o_itube >> f_iphi >> f_ieta >> f_itube;
 		swaps.tubeSwaps[iTubeSwap].o_iphi = o_iphi;
 		swaps.tubeSwaps[iTubeSwap].o_ieta = o_ieta;
 		swaps.tubeSwaps[iTubeSwap].f_iphi = f_iphi;
 		swaps.tubeSwaps[iTubeSwap].f_ieta = f_ieta;
+		swaps.tubeSwaps[iTubeSwap].o_itube = o_itube;
+		swaps.tubeSwaps[iTubeSwap].f_itube = f_itube;
 	}
 	in >> numSrcErrors;
 	swaps.numSrcErrors = numSrcErrors;
 	for (int iErr=0; iErr<numSrcErrors; iErr++)
 	{
-		in >>  o_iphi >> o_ieta >> q1TS >> q2TS;
+		in >>  o_iphi >> o_ieta >> q1TS >> q2TS >> itube;
 		swaps.srcErrors[iErr].iphi = o_iphi;
 		swaps.srcErrors[iErr].ieta = o_ieta;
 		swaps.srcErrors[iErr].q1TS = q1TS;
 		swaps.srcErrors[iErr].q2TS = q2TS;
+		swaps.srcErrors[iErr].itube = itube;
 	}
 
 	if (verbosity>1)
@@ -141,14 +149,17 @@ void readSwaps(string inSwapsFileName, TSwaps &swaps, int verbosity=0)
 		cout << "### Tube Swaps: " << numTubeSwaps << endl;
 		for (int i=0; i<numTubeSwaps; i++)
 			cout << swaps.tubeSwaps[i].o_iphi << "  " << swaps.tubeSwaps[i].o_ieta
+				<< "  " << swaps.tubeSwaps[i].o_itube
 				<< "  ->  " << swaps.tubeSwaps[i].f_iphi << "  " 
-				<< swaps.tubeSwaps[i].f_ieta
+				<< swaps.tubeSwaps[i].f_ieta << "  "
+				<< swaps.tubeSwaps[i].f_itube
 				<< endl;
 		cout << "### Src Errors: " << numSrcErrors << endl;
 		for (int i=0; i<numSrcErrors; i++)
 			cout << swaps.srcErrors[i].iphi << "  " << swaps.srcErrors[i].ieta 
 				<< "  "
 				<< swaps.srcErrors[i].q1TS << "  " << swaps.srcErrors[i].q2TS
+				<< "  " << swaps.srcErrors[i].itube
 				<< endl;
 	}
 
